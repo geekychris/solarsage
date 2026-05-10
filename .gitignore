@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+backend/.venv/
+.pytest_cache/
+
+# Node
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+
+# Build output
+dist/
+frontend/dist/
+build/
+
+# Local environment + secrets
+.env
+.env.local
+backend/.env
+backend/credentials.json
+
+# Local data
+*.db
+*.db-shm
+*.db-wal
+backend/eg4_history.db
+backend/eg4_history.db-shm
+backend/eg4_history.db-wal
+
+# Runtime state
+.run/
+*.pid
+*.log
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

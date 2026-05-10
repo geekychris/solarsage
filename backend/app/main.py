@@ -1,0 +1,1383 @@
+"""FastAPI app exposing EG4 Monitor data + history to the React UI."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import re
+import time
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
+
+from dotenv import load_dotenv
+from eg4_inverter_api import EG4InverterAPI
+from eg4_inverter_api.exceptions import EG4APIError, EG4AuthError
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+
+from datetime import datetime, timedelta, timezone
+import json
+
+import aiosqlite
+
+from . import credentials as creds_store
+from . import weather as weather_api
+from .ac_model import fit_ac_model
+from .alerts_watcher import run_alerts
+from .appliances_catalog import seed_for_site
+from .eg4_history import EG4ChartError, fetch_day_attr, fetch_day_multiline
+from .scheduler import schedule_appliances
+from .forecast import (
+    LocationConfig,
+    battery_completion,
+    excess_today,
+    max_production_envelope,
+    solar_today,
+)
+from .poller import run_poller
+from .schemas import LoginRequest, LoginResponse
+from .session_store import Session, SessionStore
+from .storage import History
+
+load_dotenv()
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("eg4.api")
+
+BASE_URL = os.getenv("EG4_BASE_URL", "https://monitor.eg4electronics.com")
+DB_PATH = os.getenv("EG4_DB_PATH", "./eg4_history.db")
+POLL_INTERVAL = int(os.getenv("EG4_POLL_INTERVAL", "60"))
+IGNORE_SSL = os.getenv("EG4_DISABLE_VERIFY_SSL", "0") == "1"
+API_KEY = os.getenv("EG4_API_KEY") or None
+AUTO_USERNAME = os.getenv("EG4_USERNAME") or None
+AUTO_PASSWORD = os.getenv("EG4_PASSWORD") or None
+
+sessions = SessionStore()
+history = History(DB_PATH)
+
+
+def _resolve_auto_credentials() -> tuple[str, str] | None:
+    """Saved-file takes precedence over .env. None if neither is configured."""
+    file_creds = creds_store.load()
+    if file_creds:
+        return file_creds
+    if AUTO_USERNAME and AUTO_PASSWORD:
+        return (AUTO_USERNAME, AUTO_PASSWORD)
+    return None
+
+
+async def _auto_login_loop() -> None:
+    """Keep a backend session alive forever if creds are available.
+
+    Re-establishes the EG4 client + poller on auth failures or transient errors.
+    Runs in the background — never blocks startup. Re-reads the file each
+    iteration so the user can save creds without restarting the server.
+    """
+    while True:
+        creds = _resolve_auto_credentials()
+        if creds is None:
+            await asyncio.sleep(30)
+            continue
+        username, password = creds
+        try:
+            client = EG4InverterAPI(username=username, password=password, base_url=BASE_URL)
+            await client.login(ignore_ssl=IGNORE_SSL)
+            session = sessions.create(username, client)
+            log.info("auto-login OK for %s (token=%s…)", username, session.token[:8])
+            session.poller_task = asyncio.create_task(
+                run_poller(session, history, POLL_INTERVAL)
+            )
+            try:
+                await session.poller_task
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("auto-login poller crashed; will restart in 30s")
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            log.exception("auto-login attempt failed; retrying in 30s")
+        await asyncio.sleep(30)
+
+
+async def _bootstrap_default_site() -> None:
+    """If the user has only a default EG4 setup (creds + the legacy settings
+    row), make sure a 'site-1' row exists in the sites table so the new
+    multi-site UI has something to show."""
+    existing = await history.list_sites()
+    if existing:
+        return
+    saved = creds_store.load()
+    if not saved:
+        return
+    settings = await _load_settings()
+    site = {
+        "id": "site-1",
+        "name": "Home",
+        "vendor": "eg4",
+        "lat": float(settings.get("lat", 31.025)),
+        "lon": float(settings.get("lon", -114.838)),
+        "tz": str(settings.get("tz", "America/Tijuana")),
+        "peak_kw": float(settings.get("peak_kw", 10.0)),
+        "battery_capacity_kwh": float(settings.get("battery_capacity_kwh", 14.3)),
+        "max_charge_kw": float(settings.get("max_charge_kw", 8.0)),
+        "config_json": {},
+        "credentials_json": {"username": saved[0], "password": saved[1]},
+    }
+    await history.upsert_site(site)
+    log.info("created default site-1 from saved EG4 credentials")
+    # seed appliance catalog
+    for a in seed_for_site("site-1"):
+        await history.upsert_appliance(a)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+    await history.init()
+    await _bootstrap_default_site()
+    log.info("history db ready at %s", DB_PATH)
+    # Start the auto-login loop unconditionally — it idles if no creds are
+    # configured and picks them up the moment the user clicks "Save" in the UI.
+    auto_task = asyncio.create_task(_auto_login_loop())
+    log.info("auto-login background task started")
+    alerts_task = asyncio.create_task(run_alerts(history))
+    log.info("alerts watcher started")
+    yield
+    alerts_task.cancel()
+    if auto_task:
+        auto_task.cancel()
+    await sessions.drop_all()
+
+
+app = FastAPI(
+    title="SolarSage",
+    description="Monitor · Predict · Optimize — EG4 solar telemetry, history, weather-aware forecasts.",
+    lifespan=lifespan,
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # local-only app — see README
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+async def _resolve_auth(
+    authorization: str | None,
+    x_api_key: str | None,
+    api_key_q: str | None,
+) -> tuple[Session | None, bool]:
+    """Returns (session_or_None, is_api_key_auth). Raises 401 on no auth."""
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+        s = sessions.get(token)
+        if s is not None:
+            return s, False
+    presented = x_api_key or api_key_q
+    if API_KEY and presented and presented == API_KEY:
+        latest = max(sessions._sessions.values(), key=lambda s: s.created_at, default=None)
+        return latest, True
+    raise HTTPException(status_code=401, detail="missing or invalid auth")
+
+
+async def require_session(
+    authorization: str | None = Header(default=None),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    api_key: str | None = Query(default=None, alias="api_key"),
+) -> Session:
+    """For endpoints that talk to EG4: a live session must exist."""
+    s, is_key = await _resolve_auth(authorization, x_api_key, api_key)
+    if s is None:
+        raise HTTPException(
+            status_code=412,
+            detail="API key valid, but no EG4 session is active. Sign in via the UI first.",
+        )
+    return s
+
+
+async def require_read(
+    authorization: str | None = Header(default=None),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    api_key: str | None = Query(default=None, alias="api_key"),
+) -> Session | None:
+    """For SQL-only read endpoints: API key works even without an active session."""
+    s, _ = await _resolve_auth(authorization, x_api_key, api_key)
+    return s
+
+
+def _inverter_to_dict(inv: Any) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for k, v in inv.__dict__.items():
+        if k.startswith("_"):
+            continue
+        if isinstance(v, (str, int, float, bool)) or v is None:
+            out[k] = v
+    return out
+
+
+@app.post("/api/login", response_model=LoginResponse)
+async def login(req: LoginRequest):
+    client = EG4InverterAPI(username=req.username, password=req.password, base_url=BASE_URL)
+    try:
+        await client.login(ignore_ssl=IGNORE_SSL)
+    except EG4AuthError as exc:
+        await client.close()
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except EG4APIError as exc:
+        await client.close()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:  # aiohttp transport / TLS / DNS errors
+        await client.close()
+        msg = str(exc) or exc.__class__.__name__
+        if "certificate" in msg.lower() or "ssl" in msg.lower():
+            msg = (
+                f"TLS error reaching {BASE_URL}: {msg}. "
+                "If you trust your network, set EG4_DISABLE_VERIFY_SSL=1 in backend/.env and restart."
+            )
+        raise HTTPException(status_code=502, detail=msg) from exc
+
+    session = sessions.create(req.username, client)
+    # kick off the historical poller for this session
+    session.poller_task = asyncio.create_task(
+        run_poller(session, history, POLL_INTERVAL)
+    )
+
+    remembered = False
+    if req.remember:
+        try:
+            creds_store.save(req.username, req.password)
+            remembered = True
+            log.info("creds saved to %s for %s", os.getenv("EG4_CREDS_PATH", "./credentials.json"), req.username)
+        except Exception as exc:
+            log.warning("could not persist creds: %s", exc)
+
+    return LoginResponse(
+        token=session.token,
+        username=req.username,
+        inverter_count=len(client.get_inverters()),
+        remembered=remembered,
+    )
+
+
+@app.post("/api/logout")
+async def logout(
+    forget: bool = Query(default=False),
+    session: Session = Depends(require_session),
+):
+    await sessions.drop(session.token)
+    forgotten = creds_store.clear() if forget else False
+    return {"ok": True, "credentials_forgotten": forgotten}
+
+
+@app.get("/api/auth/status")
+async def auth_status():
+    """Public — tells the login screen whether creds are already remembered."""
+    return {
+        "credentials_persisted": creds_store.exists(),
+        "active_sessions": len(sessions._sessions),
+    }
+
+
+@app.post("/api/auth/use_saved")
+async def use_saved():
+    """Hand the caller a token for the auto-login session.
+
+    Returns the token of the most recent session whose username matches the
+    saved credentials. No additional auth required because the backend only
+    listens on 127.0.0.1 (see `--host` in the run command). The caller proves
+    they're entitled to this token by being on localhost.
+    """
+    saved = creds_store.load()
+    if not saved:
+        raise HTTPException(status_code=404, detail="no saved credentials")
+    username, _ = saved
+    matching = [s for s in sessions._sessions.values() if s.username == username]
+    if not matching:
+        raise HTTPException(
+            status_code=503,
+            detail="saved credentials present but auto-login session not ready yet",
+        )
+    s = max(matching, key=lambda s: s.created_at)
+    return {"token": s.token, "username": s.username, "inverter_count": len(s.client.get_inverters())}
+
+
+@app.get("/api/inverters")
+async def list_inverters(session: Session = Depends(require_session)):
+    return {"inverters": [_inverter_to_dict(i) for i in session.client.get_inverters()]}
+
+
+async def _fetch(session: Session, serial: str, method: str) -> dict[str, Any]:
+    async with session.lock:
+        session.client.set_selected_inverter(serialNum=serial)
+        result = await getattr(session.client, method)()
+    if not hasattr(result, "to_dict"):
+        raise HTTPException(status_code=502, detail=f"EG4 returned error: {result!r}")
+    return result.to_dict()
+
+
+@app.get("/api/runtime")
+async def runtime(
+    serial: str = Query(..., alias="serial"),
+    session: Session = Depends(require_session),
+):
+    data = await _fetch(session, serial, "get_inverter_runtime_async")
+    return {"serial": serial, "ts": int(time.time() * 1000), "data": data}
+
+
+@app.get("/api/energy")
+async def energy(
+    serial: str = Query(..., alias="serial"),
+    session: Session = Depends(require_session),
+):
+    data = await _fetch(session, serial, "get_inverter_energy_async")
+    return {"serial": serial, "ts": int(time.time() * 1000), "data": data}
+
+
+@app.get("/api/battery")
+async def battery(
+    serial: str = Query(..., alias="serial"),
+    session: Session = Depends(require_session),
+):
+    data = await _fetch(session, serial, "get_inverter_battery_async")
+    return {"serial": serial, "ts": int(time.time() * 1000), "data": data}
+
+
+@app.get("/api/snapshot")
+async def snapshot(
+    serial: str = Query(..., alias="serial"),
+    session: Session = Depends(require_session),
+):
+    """Convenience endpoint: runtime+energy+battery in one call."""
+    r = await _fetch(session, serial, "get_inverter_runtime_async")
+    e = await _fetch(session, serial, "get_inverter_energy_async")
+    b = await _fetch(session, serial, "get_inverter_battery_async")
+    return {
+        "serial": serial,
+        "ts": int(time.time() * 1000),
+        "runtime": r,
+        "energy": e,
+        "battery": b,
+    }
+
+
+@app.get("/api/metrics")
+async def metrics(
+    serial: str = Query(..., alias="serial"),
+    session: Session | None = Depends(require_read),
+):
+    """List of (category, field) pairs the history DB has for this inverter."""
+    fields = await history.list_fields(serial)
+    return {"serial": serial, "metrics": fields}
+
+
+@app.get("/api/history")
+async def history_query(
+    serial: str = Query(..., alias="serial"),
+    field: str = Query(..., alias="field"),
+    start: int | None = Query(default=None, description="unix ms"),
+    end: int | None = Query(default=None, description="unix ms"),
+    range_minutes: int | None = Query(default=None, alias="range_minutes"),
+    max_points: int = Query(default=1000, ge=10, le=5000),
+    session: Session | None = Depends(require_read),
+):
+    now = int(time.time() * 1000)
+    if end is None:
+        end = now
+    if start is None:
+        minutes = range_minutes if range_minutes is not None else 60
+        start = end - minutes * 60_000
+    points = await history.query(serial, field, start, end, max_points=max_points)
+    return {
+        "serial": serial,
+        "field": field,
+        "start": start,
+        "end": end,
+        "points": points,
+    }
+
+
+DEFAULT_SETTINGS = {
+    # San Felipe, Baja California, Mexico
+    "lat": 31.025,
+    "lon": -114.838,
+    "tz": "America/Tijuana",
+    "peak_kw": 10.0,
+    "battery_capacity_kwh": 14.3,
+    "max_charge_kw": 8.0,
+    "history_days": 7,
+}
+
+
+def _tz_offset_minutes(tz_name: str) -> int:
+    """Resolve an IANA tz name to current UTC offset minutes (DST-aware)."""
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(tz_name)
+        return int(datetime.now(tz).utcoffset().total_seconds() / 60)
+    except Exception:
+        # fall back: if user typed a numeric offset like "-420" or "-7"
+        try:
+            n = float(tz_name)
+            return int(n if abs(n) > 16 else n * 60)
+        except Exception:
+            return -420  # PDT
+
+
+async def _load_settings() -> dict:
+    raw = await history.get_settings()
+    out = dict(DEFAULT_SETTINGS)
+    for k, v in raw.items():
+        try:
+            out[k] = json.loads(v)
+        except Exception:
+            out[k] = v
+    return out
+
+
+def _location_from(settings: dict) -> LocationConfig:
+    return LocationConfig(
+        lat=float(settings["lat"]),
+        lon=float(settings["lon"]),
+        tz_offset_minutes=_tz_offset_minutes(str(settings.get("tz", "America/Tijuana"))),
+        peak_kw=float(settings["peak_kw"]),
+        battery_capacity_kwh=float(settings["battery_capacity_kwh"]),
+        max_charge_kw=float(settings["max_charge_kw"]),
+    )
+
+
+@app.get("/api/settings")
+async def get_settings(session: Session = Depends(require_session)):
+    s = await _load_settings()
+    s["tz_offset_minutes"] = _tz_offset_minutes(str(s.get("tz", "America/Tijuana")))
+    return s
+
+
+@app.put("/api/settings")
+async def put_settings(
+    body: dict[str, Any],
+    session: Session = Depends(require_session),
+):
+    allowed = set(DEFAULT_SETTINGS.keys())
+    to_write = {k: json.dumps(v) for k, v in body.items() if k in allowed}
+    if not to_write:
+        raise HTTPException(status_code=400, detail="no recognized settings in body")
+    await history.set_settings(to_write)
+    return await _load_settings()
+
+
+@app.get("/api/forecast/solar_today")
+async def forecast_solar_today(
+    serial: str = Query(..., alias="serial"),
+    session: Session = Depends(require_session),
+):
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    return await solar_today(
+        history, serial, loc, hist_days=int(settings.get("history_days", 7))
+    )
+
+
+@app.get("/api/forecast/battery_completion")
+async def forecast_battery_completion(
+    serial: str = Query(..., alias="serial"),
+    session: Session = Depends(require_session),
+):
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    return await battery_completion(history, serial, loc)
+
+
+@app.post("/api/debug/eg4")
+async def debug_eg4(
+    body: dict[str, Any],
+    session: Session = Depends(require_session),
+):
+    """Raw passthrough to any EG4 portal endpoint using the active session.
+
+    Body shape: {"path": "/WManage/api/...", "payload": "k=v&...", "method": "POST"}
+    Returns the upstream HTTP status, content-type, body length, and first
+    2 KB of the body — enough to diagnose endpoint-not-found vs auth vs
+    response-shape mismatches without polluting the response with a huge dump.
+    """
+    path = body.get("path") or ""
+    payload = body.get("payload") or ""
+    method = (body.get("method") or "POST").upper()
+    if not path.startswith("/"):
+        raise HTTPException(status_code=400, detail="path must start with /")
+    client = session.client
+    upstream_session = await client._get_session()
+    url = f"{client._base_url}{path}"
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json, text/plain, */*",
+    }
+    async with upstream_session.request(method, url, data=payload, headers=headers) as r:
+        text = await r.text()
+        ct = r.headers.get("Content-Type", "")
+        sample = text[:16384]
+        return {
+            "url": url,
+            "method": method,
+            "request_payload": payload,
+            "status": r.status,
+            "content_type": ct,
+            "length": len(text),
+            "body_sample": sample,
+        }
+
+
+@app.get("/api/diagnostic")
+async def diagnostic(
+    serial: str = Query(..., alias="serial"),
+    session: Session = Depends(require_session),
+):
+    """Return the exact field names + values EG4 is currently returning.
+
+    Useful when live tiles show '—' — compare the keys here against the
+    candidate lists in LiveTiles.jsx.
+    """
+    out: dict[str, Any] = {"serial": serial}
+    async with session.lock:
+        session.client.set_selected_inverter(serialNum=serial)
+        try:
+            r = await session.client.get_inverter_runtime_async()
+            out["runtime"] = {
+                "type": type(r).__name__,
+                "fields": r.to_dict() if hasattr(r, "to_dict") else None,
+            }
+        except Exception as exc:
+            out["runtime"] = {"error": str(exc)}
+        try:
+            e = await session.client.get_inverter_energy_async()
+            out["energy"] = {
+                "type": type(e).__name__,
+                "fields": e.to_dict() if hasattr(e, "to_dict") else None,
+            }
+        except Exception as exc:
+            out["energy"] = {"error": str(exc)}
+        try:
+            b = await session.client.get_inverter_battery_async()
+            out["battery"] = {
+                "type": type(b).__name__,
+                "fields": b.to_dict() if hasattr(b, "to_dict") else None,
+            }
+        except Exception as exc:
+            out["battery"] = {"error": str(exc)}
+    # Stored history overview
+    out["stored_fields"] = sorted(await history.known_fields(serial))
+    settings = await _load_settings()
+    out["coverage"] = await history.date_coverage(serial, _tz_offset_minutes(str(settings.get("tz", "America/Tijuana"))))
+    return out
+
+
+@app.post("/api/sync")
+async def sync(
+    serial: str = Query(..., alias="serial"),
+    days: int = Query(default=30, ge=1, le=365),
+    session: Session = Depends(require_session),
+):
+    """One-click historical pull + live snapshot capture.
+
+    1. Pulls the last `days` days from EG4 via dayMultiLineParallel.
+    2. Captures a live snapshot so the latest minute is in SQLite too.
+    3. Reports what was written.
+    """
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    tz_off = loc.tz_offset_minutes
+    today_local = datetime.now(timezone.utc).astimezone(timezone(timedelta(minutes=tz_off))).date()
+    day_results = []
+    total_values = 0
+    total_points = 0
+    errors: list[str] = []
+
+    async with session.lock:
+        # Historical backfill
+        for back in range(days - 1, -1, -1):
+            d = today_local - timedelta(days=back)
+            date_text = d.isoformat()
+            try:
+                samples = await fetch_day_multiline(session.client, serial, date_text, tz_off)
+                tuples = [(s.ts_ms, s.fields) for s in samples]
+                written = await history.upsert_many(serial, "historical", tuples)
+                total_values += written
+                total_points += len(samples)
+                day_results.append({"date": date_text, "ok": True, "points": len(samples), "values": written})
+            except EG4ChartError as exc:
+                msg = f"{date_text}: HTTP {exc.status} from {exc.path}"
+                errors.append(msg)
+                day_results.append({
+                    "date": date_text, "ok": False, "error": msg,
+                    "upstream_status": exc.status,
+                    "upstream_path": exc.path,
+                    "upstream_content_type": exc.content_type,
+                    "upstream_body_sample": exc.body_sample,
+                })
+            except Exception as exc:
+                msg = f"{date_text}: {exc.__class__.__name__}: {exc}"
+                errors.append(msg)
+                day_results.append({"date": date_text, "ok": False, "error": msg})
+
+        # Live snapshot — runs through the same poller pipeline so all numeric
+        # fields land in the same SQLite store.
+        try:
+            session.client.set_selected_inverter(serialNum=serial)
+            runtime = await session.client.get_inverter_runtime_async()
+            energy = await session.client.get_inverter_energy_async()
+            battery = await session.client.get_inverter_battery_async()
+            if hasattr(runtime, "to_dict"):
+                await history.record(serial, "runtime", runtime.to_dict())
+            if hasattr(energy, "to_dict"):
+                await history.record(serial, "energy", energy.to_dict())
+            if hasattr(battery, "to_dict"):
+                bd = battery.to_dict()
+                await history.record(serial, "battery", {k: v for k, v in bd.items() if k != "battery_units"})
+                for unit in bd.get("battery_units", []) or []:
+                    idx = unit.get("batIndex")
+                    if idx is None:
+                        continue
+                    await history.record(serial, "battery_unit", {
+                        f"unit{idx}_soc": unit.get("soc"),
+                        f"unit{idx}_soh": unit.get("soh"),
+                        f"unit{idx}_voltage": unit.get("totalVoltage"),
+                        f"unit{idx}_current": unit.get("current"),
+                        f"unit{idx}_cycles": unit.get("cycleCnt"),
+                    })
+        except Exception as exc:
+            errors.append(f"live snapshot: {exc}")
+
+    days_with_data = sum(1 for d in day_results if d.get("ok") and d.get("points", 0) > 0)
+    return {
+        "serial": serial,
+        "days_requested": days,
+        "days_with_data": days_with_data,
+        "total_points": total_points,
+        "total_values_written": total_values,
+        "stored_fields": sorted(await history.known_fields(serial)),
+        "coverage": await history.date_coverage(serial, tz_off),
+        "errors": errors,
+        "days": day_results,
+    }
+
+
+@app.post("/api/backfill")
+async def backfill(
+    serial: str = Query(..., alias="serial"),
+    days: int = Query(default=14, ge=1, le=365),
+    overwrite: bool = Query(default=False),
+    session: Session = Depends(require_session),
+):
+    """Pull `days` of historical chart data from EG4 into our SQLite store.
+
+    Iterates from (today - days + 1) → today in the inverter's local timezone.
+    Idempotent: re-running just updates existing rows.
+    """
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    tz_off = loc.tz_offset_minutes
+    today_local = datetime.now(timezone.utc).astimezone(timezone(timedelta(minutes=tz_off))).date()
+    results = []
+    total_samples = 0
+    async with session.lock:
+        for back in range(days - 1, -1, -1):
+            d = today_local - timedelta(days=back)
+            date_text = d.isoformat()
+            try:
+                samples = await fetch_day_multiline(session.client, serial, date_text, tz_off)
+            except Exception as exc:
+                log.exception("backfill day %s failed", date_text)
+                results.append({"date": date_text, "ok": False, "error": str(exc)})
+                continue
+            tuples = [(s.ts_ms, s.fields) for s in samples]
+            inserted = await history.upsert_many(serial, "historical", tuples)
+            total_samples += inserted
+            results.append({"date": date_text, "ok": True, "points": len(samples), "values": inserted})
+    return {"serial": serial, "days_requested": days, "total_values_written": total_samples, "days": results}
+
+
+@app.get("/api/coverage")
+async def coverage(
+    serial: str = Query(..., alias="serial"),
+    session: Session | None = Depends(require_read),
+):
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    return {
+        "serial": serial,
+        "tz_offset_minutes": loc.tz_offset_minutes,
+        "by_date": await history.date_coverage(serial, loc.tz_offset_minutes),
+    }
+
+
+@app.get("/api/range")
+async def range_query(
+    serial: str = Query(..., alias="serial"),
+    start: int | None = Query(default=None, description="UTC ms; omit with `days`/`end`"),
+    end: int | None = Query(default=None, description="UTC ms; defaults to now"),
+    days: float | None = Query(default=None, ge=0.04, le=3650, description="Convenience window from `end` backwards"),
+    fields: str = Query(
+        default="ppv,consumptionPower,pCharge,pDisCharge,pToGrid,pToUser,peps,soc",
+        description="Comma-separated list of fields to return",
+    ),
+    target_points: int = Query(default=400, ge=20, le=5000, description="Approx points per series; controls bucket size"),
+    session: Session | None = Depends(require_read),
+):
+    """Multi-channel time-range query for the UI charts.
+
+    Auto-picks a bucket size based on (end-start)/target_points so panning across
+    weeks doesn't return tens of thousands of points. Choices snap to
+    {1m, 5m, 15m, 1h, 6h, 1d}."""
+    now_ms = int(time.time() * 1000)
+    if end is None:
+        end = now_ms
+    if start is None:
+        if days is None:
+            raise HTTPException(status_code=400, detail="provide either `start` or `days`")
+        start = int(end - days * 86_400_000)
+    if start >= end:
+        raise HTTPException(status_code=400, detail="start must be < end")
+
+    span_ms = end - start
+    ideal_bucket_ms = max(60_000, span_ms // target_points)
+    # Snap to a friendly bucket size
+    SNAPS = [
+        ("1m", 60_000),
+        ("5m", 5 * 60_000),
+        ("15m", 15 * 60_000),
+        ("1h", 60 * 60_000),
+        ("6h", 6 * 60 * 60_000),
+        ("1d", 24 * 60 * 60_000),
+    ]
+    bucket_label, bucket_ms = SNAPS[0]
+    for label, ms in SNAPS:
+        if ms >= ideal_bucket_ms:
+            bucket_label, bucket_ms = label, ms
+            break
+    else:
+        bucket_label, bucket_ms = SNAPS[-1]
+
+    field_list = [f.strip() for f in fields.split(",") if f.strip()]
+    series: dict[str, list[dict[str, float]]] = {}
+    for f in field_list:
+        # Bucketed AVG; ts returned is bucket start in UTC ms
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "SELECT (ts / ?) * ? AS bucket, AVG(value), COUNT(value)"
+                " FROM samples"
+                " WHERE serial_num = ? AND field = ? AND ts BETWEEN ? AND ?"
+                " GROUP BY bucket ORDER BY bucket",
+                (bucket_ms, bucket_ms, serial, f, start, end),
+            )
+            rows = await cur.fetchall()
+        series[f] = [
+            {"ts": int(b), "value": float(v), "count": int(c)}
+            for b, v, c in rows
+            if v is not None
+        ]
+
+    return {
+        "serial": serial,
+        "start_ms": start,
+        "end_ms": end,
+        "span_ms": span_ms,
+        "bucket_ms": bucket_ms,
+        "bucket_label": bucket_label,
+        "fields": field_list,
+        "series": series,
+    }
+
+
+@app.get("/api/daychart")
+async def daychart(
+    serial: str = Query(..., alias="serial"),
+    date: str = Query(..., description="YYYY-MM-DD in inverter local tz"),
+    fetch_if_missing: bool = Query(default=True),
+    session: Session = Depends(require_session),
+):
+    """All channels for a specific local day, bucketed at 15 min for charting.
+
+    Reads from SQLite first. If the day has no samples and `fetch_if_missing`
+    is set, calls EG4's dayMultiLineParallel and caches the result before
+    returning.
+    """
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    tz_off = loc.tz_offset_minutes
+    # local-day bounds in UTC ms
+    y, mo, d = (int(x) for x in date.split("-"))
+    day_start = datetime(y, mo, d, 0, 0, tzinfo=timezone(timedelta(minutes=tz_off)))
+    day_end = day_start + timedelta(days=1)
+    start_ms = int(day_start.astimezone(timezone.utc).timestamp() * 1000)
+    end_ms = int(day_end.astimezone(timezone.utc).timestamp() * 1000)
+
+    known = await history.known_fields(serial)
+    fields_to_plot = [
+        f for f in ("ppv", "consumptionPower", "pCharge", "pDisCharge", "gridPower", "soc", "acCouplePower")
+        if f in known
+    ]
+
+    # If no samples yet for this day, try to backfill it just-in-time
+    if fetch_if_missing:
+        any_data = False
+        for f in fields_to_plot or ["ppv"]:
+            pts = await history.query(serial, f, start_ms, end_ms, max_points=2)
+            if pts:
+                any_data = True
+                break
+        if not any_data:
+            async with session.lock:
+                try:
+                    samples = await fetch_day_multiline(session.client, serial, date, tz_off)
+                    await history.upsert_many(serial, "historical", [(s.ts_ms, s.fields) for s in samples])
+                    if samples:
+                        known = await history.known_fields(serial)
+                        fields_to_plot = [
+                            f for f in ("ppv", "consumptionPower", "pCharge", "pDisCharge", "gridPower", "soc", "acCouplePower")
+                            if f in known
+                        ] or ["ppv"]
+                except Exception as exc:
+                    log.warning("just-in-time fetch for %s failed: %s", date, exc)
+
+    series: dict[str, list[dict[str, float]]] = {}
+    for f in fields_to_plot:
+        series[f] = await history.query(serial, f, start_ms, end_ms, max_points=200)
+
+    return {
+        "serial": serial,
+        "date": date,
+        "tz_offset_minutes": tz_off,
+        "start_ms": start_ms,
+        "end_ms": end_ms,
+        "series": series,
+    }
+
+
+@app.get("/api/aggregate")
+async def aggregate(
+    serial: str = Query(..., alias="serial"),
+    field: str = Query(..., description="Field name, e.g. ppv, consumptionPower, soc"),
+    start: int | None = Query(default=None, description="UTC ms"),
+    end: int | None = Query(default=None, description="UTC ms"),
+    days: int | None = Query(default=None, ge=1, le=3650, description="Convenience: last N days"),
+    group_by: str = Query(default="day", description="minute|hour|day|week|month|none"),
+    fn: str = Query(default="avg", description="avg|sum|min|max|count"),
+    session: Session | None = Depends(require_read),
+):
+    """Generic bucketed aggregation. Designed for analytic questions like
+    'sum daily ppv for the last 30 days' or 'max hourly consumption over July'."""
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    now_ms = int(time.time() * 1000)
+    if end is None:
+        end = now_ms
+    if start is None:
+        if days is not None:
+            start = end - days * 86_400_000
+        else:
+            start = end - 7 * 86_400_000
+    try:
+        rows = await history.aggregate(
+            serial_num=serial, field=field, start_ms=start, end_ms=end,
+            group_by=group_by, fn=fn, tz_offset_minutes=loc.tz_offset_minutes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "serial": serial,
+        "field": field,
+        "start_ms": start,
+        "end_ms": end,
+        "group_by": group_by,
+        "fn": fn,
+        "tz_offset_minutes": loc.tz_offset_minutes,
+        "rows": rows,
+    }
+
+
+def _power_to_kwh(rows: list[dict], sample_interval_min: float) -> dict[str, float]:
+    """Approximate kWh by summing power × interval. Returns {bucket: kwh}."""
+    out: dict[str, float] = {}
+    for r in rows:
+        if r["value"] is None:
+            continue
+        # value is avg W over the bucket; energy ≈ avg_W * (count * sample_min / 60) / 1000
+        out[r["bucket"]] = r["value"] * (r["count"] * sample_interval_min / 60) / 1000
+    return out
+
+
+@app.get("/api/summary")
+async def summary(
+    serial: str = Query(..., alias="serial"),
+    days: int = Query(default=30, ge=1, le=365),
+    session: Session | None = Depends(require_read),
+):
+    """Single-call analytics summary: per-day kWh totals, all-time peaks, and
+    a ranked list of best/worst days by solar production. Output is optimized
+    for an LLM to read aloud and answer questions from."""
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    now_ms = int(time.time() * 1000)
+    start_ms = now_ms - days * 86_400_000
+    tz_off = loc.tz_offset_minutes
+
+    known = await history.known_fields(serial)
+    fields = {
+        "solar_w": next((f for f in ("ppv", "solarPv", "pPV", "totalPv") if f in known), None),
+        "load_w": next((f for f in ("consumptionPower", "consumption", "pLoad") if f in known), None),
+        "charge_w": next((f for f in ("pCharge", "ppvpCharge", "batChargePower") if f in known), None),
+        "discharge_w": next((f for f in ("pDisCharge", "batteryDischarging") if f in known), None),
+        "grid_w": next((f for f in ("gridPower", "pToGrid") if f in known), None),
+        "soc": next((f for f in ("soc", "unit0_soc", "batterySoc") if f in known), None),
+    }
+
+    # Daily kWh per metric (avg W per day × 24)
+    daily: dict[str, list[dict]] = {}
+    overall: dict[str, dict[str, float | None]] = {}
+    for label, fname in fields.items():
+        if not fname:
+            daily[label] = []
+            overall[label] = {"avg": None, "min": None, "max": None, "sum": None}
+            continue
+        daily_rows = await history.aggregate(
+            serial, fname, start_ms, now_ms, group_by="day", fn="avg",
+            tz_offset_minutes=tz_off,
+        )
+        # Convert average-W per day into approximate kWh: avg_W * 24 / 1000
+        for r in daily_rows:
+            if r["value"] is not None:
+                r["kwh_estimate"] = r["value"] * 24 / 1000
+        daily[label] = daily_rows
+        overall[label] = await history.overall_stats(serial, fname, start_ms, now_ms)
+        # convert overall avg W → kWh estimate over whole window (avg_W * hours_in_window / 1000)
+        if overall[label]["avg"] is not None:
+            hours = (now_ms - start_ms) / 3_600_000
+            overall[label]["kwh_estimate"] = overall[label]["avg"] * hours / 1000
+
+    # Best/worst solar days (only meaningful if we have solar field)
+    best_days: list[dict] = []
+    worst_days: list[dict] = []
+    if fields["solar_w"]:
+        solar_daily = sorted(
+            [r for r in daily.get("solar_w", []) if r["value"] is not None],
+            key=lambda r: r["value"], reverse=True,
+        )
+        best_days = solar_daily[:5]
+        worst_days = solar_daily[-5:][::-1]
+
+    return {
+        "serial": serial,
+        "days_window": days,
+        "tz_offset_minutes": tz_off,
+        "fields_used": fields,
+        "daily": daily,
+        "overall": overall,
+        "best_solar_days": best_days,
+        "worst_solar_days": worst_days,
+    }
+
+
+@app.get("/api/best_day")
+async def best_day(
+    serial: str = Query(..., alias="serial"),
+    field: str = Query(default="ppv"),
+    fn: str = Query(default="avg", description="avg|sum|max"),
+    days: int = Query(default=365, ge=1, le=3650),
+    direction: str = Query(default="best", description="best|worst"),
+    n: int = Query(default=10, ge=1, le=100),
+    session: Session | None = Depends(require_read),
+):
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    now_ms = int(time.time() * 1000)
+    rows = await history.aggregate(
+        serial, field, now_ms - days * 86_400_000, now_ms,
+        group_by="day", fn=fn, tz_offset_minutes=loc.tz_offset_minutes,
+    )
+    rows = [r for r in rows if r["value"] is not None]
+    rows.sort(key=lambda r: r["value"], reverse=(direction == "best"))
+    return {
+        "serial": serial, "field": field, "fn": fn, "direction": direction,
+        "rows": rows[:n],
+    }
+
+
+@app.get("/api/weather")
+async def weather_endpoint(
+    days: int = Query(default=7, ge=1, le=16),
+    session: Session | None = Depends(require_read),
+):
+    settings = await _load_settings()
+    try:
+        f = await weather_api.forecast(
+            lat=float(settings["lat"]),
+            lon=float(settings["lon"]),
+            days=days,
+            tz=str(settings.get("tz", "auto")),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"open-meteo: {exc}") from exc
+    return f
+
+
+@app.get("/api/forecast/tomorrow")
+async def forecast_tomorrow(
+    serial: str = Query(..., alias="serial"),
+    horizon_days: int = Query(default=2, ge=1, le=7, description="Forecast horizon (incl today)"),
+    session: Session | None = Depends(require_read),
+):
+    """Hour-by-hour forecast of PV / base load / AC contribution / surplus.
+
+    Combines: Open-Meteo solar irradiance & temperature forecast + a fitted
+    cooling-degree AC model + the historical PV-vs-irradiance ratio observed
+    for this system.
+    """
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    tz = str(settings.get("tz", "auto"))
+
+    # 1. Pull weather forecast (hourly)
+    f = await weather_api.forecast(loc.lat, loc.lon, days=horizon_days, tz=tz)
+    h = f.get("hourly") or {}
+    times = h.get("time") or []
+    temps = h.get("temperature_2m") or []
+    ghi = h.get("shortwave_radiation") or []
+    cloud = h.get("cloud_cover") or []
+    if not times or len(times) != len(temps):
+        raise HTTPException(status_code=502, detail="weather forecast missing hourly data")
+
+    # 2. Fit AC model from the last 14 days of historical weather + load
+    known = await history.known_fields(serial)
+    load_field = next((f for f in ("consumptionPower", "peps") if f in known), None)
+    ac_model = None
+    if load_field:
+        from datetime import date as _date
+        today = _date.today()
+        start_d = (today - timedelta(days=14)).isoformat()
+        end_d = today.isoformat()
+        try:
+            arch = await weather_api.historical(loc.lat, loc.lon, start_d, end_d, tz=tz)
+            ac_model = await fit_ac_model(
+                history, serial, arch.get("hourly", {}),
+                loc.tz_offset_minutes, load_field,
+            )
+        except Exception as exc:
+            log.warning("ac_model fit failed: %s", exc)
+
+    # 3. PV scaling: how much W per W/m² of GHI did this system produce on
+    #    average historically (peak hours only, to avoid dawn/dusk noise).
+    pv_field = next((f for f in ("ppv", "ppv1") if f in known), None)
+    pv_per_ghi = None
+    if pv_field:
+        # Approximate by ratio of peak observed PV to peak GHI in archive
+        pv_max_by_hour = await history.bucket_max_by_time_of_day(
+            serial, pv_field, days=14, bucket_minutes=60,
+            tz_offset_minutes=loc.tz_offset_minutes,
+        )
+        # Use the brightest historical hour as the calibration anchor; assume
+        # clear-sky GHI ≈ 950 W/m² at solar noon for San Felipe in May
+        peak_pv = max(pv_max_by_hour.values(), default=0.0)
+        peak_ghi = max(ghi[:48] or [0])  # next 48 hours
+        if peak_pv > 0 and peak_ghi > 0:
+            pv_per_ghi = peak_pv / max(peak_ghi, 100)
+        elif loc.peak_kw:
+            # Fallback: kW per kW/m² at STC, derated 80% for real conditions
+            pv_per_ghi = loc.peak_kw * 1000 * 0.8 / 1000  # W per W/m²
+
+    # 4. Build per-hour forecast
+    rows = []
+    for i, t in enumerate(times):
+        hour = int(t[11:13])
+        temp_f = float(temps[i]) if temps[i] is not None else None
+        cloud_pct = float(cloud[i]) if i < len(cloud) and cloud[i] is not None else None
+        ghi_w = float(ghi[i]) if i < len(ghi) and ghi[i] is not None else 0.0
+
+        # Predicted PV (W) — scale GHI by our system's PV-per-GHI ratio
+        pred_pv = ghi_w * pv_per_ghi if pv_per_ghi else 0.0
+        # Predicted load
+        if ac_model and temp_f is not None:
+            pred_load = ac_model.predict_load(hour, temp_f)
+            ac_part = ac_model.slope_w_per_f * max(0.0, temp_f - ac_model.threshold_f)
+            base_part = pred_load - ac_part
+        else:
+            pred_load = None
+            ac_part = None
+            base_part = None
+
+        rows.append({
+            "time": t,
+            "hour_of_day": hour,
+            "temperature_f": temp_f,
+            "cloud_pct": cloud_pct,
+            "ghi_wm2": ghi_w,
+            "predicted_pv_w": pred_pv,
+            "predicted_load_w": pred_load,
+            "predicted_ac_w": ac_part,
+            "predicted_base_load_w": base_part,
+            "predicted_surplus_w": (
+                pred_pv - pred_load if pred_load is not None else pred_pv
+            ),
+        })
+
+    return {
+        "serial": serial,
+        "tz": tz,
+        "location": {"lat": loc.lat, "lon": loc.lon},
+        "ac_model": {
+            "threshold_f": ac_model.threshold_f if ac_model else None,
+            "slope_w_per_f": ac_model.slope_w_per_f if ac_model else None,
+            "r_squared": ac_model.correlation if ac_model else None,
+            "days_used": ac_model.days_used if ac_model else 0,
+            "load_field": ac_model.load_field if ac_model else None,
+        },
+        "pv_calibration": {
+            "field": pv_field,
+            "w_per_ghi": pv_per_ghi,
+        },
+        "hourly": rows,
+    }
+
+
+@app.get("/api/forecast/excess")
+async def forecast_excess(
+    serial: str = Query(..., alias="serial"),
+    session: Session | None = Depends(require_read),
+):
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    return await excess_today(
+        history, serial, loc, hist_days=int(settings.get("history_days", 14))
+    )
+
+
+@app.get("/api/forecast/max_production")
+async def forecast_max_production(session: Session = Depends(require_session)):
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    return {
+        "tz_offset_minutes": loc.tz_offset_minutes,
+        "location": {"lat": loc.lat, "lon": loc.lon},
+        "peak_kw": loc.peak_kw,
+        "bucket_minutes": 15,
+        "buckets": await max_production_envelope(loc),
+    }
+
+
+# ============================================================================
+# Multi-site, appliances, scheduler, heatmap, alerts
+# ============================================================================
+
+@app.get("/api/sites")
+async def list_sites(session: Session | None = Depends(require_read)):
+    sites = await history.list_sites()
+    # Redact credentials from the response
+    for s in sites:
+        s.pop("credentials_json", None)
+    return {"sites": sites}
+
+
+@app.post("/api/sites")
+async def upsert_site(body: dict[str, Any], session: Session | None = Depends(require_read)):
+    required = ("id", "name", "vendor", "lat", "lon", "tz")
+    for k in required:
+        if body.get(k) in (None, ""):
+            raise HTTPException(status_code=400, detail=f"missing field: {k}")
+    if body["vendor"] not in ("eg4", "solaredge", "qcell"):
+        raise HTTPException(status_code=400, detail="vendor must be eg4|solaredge|qcell")
+    await history.upsert_site(body)
+    # Seed default appliances if this is a new site
+    existing = await history.list_appliances(body["id"])
+    if not existing:
+        for a in seed_for_site(body["id"]):
+            await history.upsert_appliance(a)
+    return await history.get_site(body["id"])
+
+
+@app.delete("/api/sites/{site_id}")
+async def delete_site(site_id: str, cascade: bool = Query(default=False),
+                      session: Session | None = Depends(require_read)):
+    await history.delete_site(site_id, cascade=cascade)
+    return {"ok": True}
+
+
+@app.get("/api/appliances")
+async def list_appliances(site_id: str = Query(..., alias="site_id"),
+                          session: Session | None = Depends(require_read)):
+    return {"site_id": site_id, "appliances": await history.list_appliances(site_id)}
+
+
+@app.post("/api/appliances")
+async def upsert_appliance(body: dict[str, Any], session: Session | None = Depends(require_read)):
+    if "site_id" not in body or "name" not in body or "watts" not in body:
+        raise HTTPException(status_code=400, detail="site_id, name, watts required")
+    body.setdefault("typical_minutes", 60)
+    aid = await history.upsert_appliance(body)
+    return {"id": aid}
+
+
+@app.delete("/api/appliances/{appliance_id}")
+async def delete_appliance(appliance_id: int, site_id: str = Query(...),
+                           session: Session | None = Depends(require_read)):
+    await history.delete_appliance(appliance_id, site_id)
+    return {"ok": True}
+
+
+@app.get("/api/schedule")
+async def schedule(serial: str = Query(...), site_id: str = Query(default="site-1"),
+                   session: Session | None = Depends(require_read)):
+    """Smart-load-scheduler recommendations for enabled appliances at this site."""
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    appliances = await history.list_appliances(site_id)
+    # Reuse the tomorrow forecast we already produce
+    f = await weather_api.forecast(loc.lat, loc.lon, days=2, tz=str(settings.get("tz", "auto")))
+    # We need the per-hour rows in the shape scheduler expects
+    h = f.get("hourly") or {}
+    rows = []
+    for i, t in enumerate(h.get("time") or []):
+        # Reuse the tomorrow endpoint's math here would be cleaner but for
+        # now we approximate surplus from weather GHI alone — main.py's
+        # forecast_tomorrow already does this for the UI.
+        ghi = (h.get("shortwave_radiation") or [0])[i] or 0
+        temp = (h.get("temperature_2m") or [0])[i]
+        # Predicted PV via the same simple calibration (peak_kw * 0.8 cap)
+        pred_pv = ghi * (loc.peak_kw * 0.8)  # W
+        # Use historical-avg load curve for predicted load — fall back to 600
+        pred_load = 600.0
+        rows.append({"time": t, "predicted_surplus_w": pred_pv - pred_load,
+                     "predicted_pv_w": pred_pv, "predicted_load_w": pred_load,
+                     "temperature_f": temp})
+    recs = schedule_appliances(appliances, rows, loc.tz_offset_minutes)
+    return {"site_id": site_id, "recommendations": recs}
+
+
+@app.get("/api/heatmap")
+async def heatmap(serial: str = Query(...),
+                  field: str = Query(default="ppv"),
+                  days: int = Query(default=365, ge=7, le=3650),
+                  session: Session | None = Depends(require_read)):
+    """Daily aggregate (sum × avg-W → kWh-ish) for the calendar heatmap."""
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    now_ms = int(time.time() * 1000)
+    rows = await history.aggregate(
+        serial, field, now_ms - days * 86_400_000, now_ms,
+        group_by="day", fn="avg", tz_offset_minutes=loc.tz_offset_minutes,
+    )
+    out = []
+    for r in rows:
+        if r["value"] is None:
+            continue
+        # convert avg W to approximate daily kWh (avg × 24h)
+        out.append({"date": r["bucket"], "kwh": r["value"] * 24 / 1000, "samples": r["count"]})
+    return {"serial": serial, "field": field, "days_window": days, "cells": out}
+
+
+@app.get("/api/string_health")
+async def string_health(serial: str = Query(...), days: int = Query(default=7),
+                        session: Session | None = Depends(require_read)):
+    """Per-string PV ratio over time. Catches one string drifting low."""
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    now_ms = int(time.time() * 1000)
+    start_ms = now_ms - days * 86_400_000
+    known = await history.known_fields(serial)
+    strings = sorted([f for f in known if re.fullmatch(r"ppv[1-9]", f)])
+    if not strings:
+        return {"serial": serial, "strings": [], "note": "no per-string PV fields"}
+    series: dict[str, list] = {}
+    daily_totals: dict[str, dict[str, float]] = {}  # field -> {day: total}
+    for s in strings:
+        rows = await history.aggregate(
+            serial, s, start_ms, now_ms, group_by="day", fn="avg",
+            tz_offset_minutes=loc.tz_offset_minutes,
+        )
+        series[s] = [{"date": r["bucket"], "avg_w": r["value"]} for r in rows if r["value"] is not None]
+    # Pairwise ratios over each day
+    days_seen = sorted({d["date"] for s in series.values() for d in s})
+    health: list[dict] = []
+    for day in days_seen:
+        by_s = {s: next((d["avg_w"] for d in series[s] if d["date"] == day), None) for s in strings}
+        values = [v for v in by_s.values() if v]
+        if not values:
+            continue
+        max_v = max(values)
+        deviations = {s: ((by_s[s] or 0) / max_v if max_v else None) for s in strings}
+        health.append({"date": day, "values": by_s, "ratio_to_strongest": deviations})
+    return {"serial": serial, "strings": strings, "series": series, "health": health}
+
+
+@app.get("/api/performance")
+async def performance(serial: str = Query(...), days: int = Query(default=30),
+                      session: Session | None = Depends(require_read)):
+    """Actual daily PV kWh vs irradiance-expected daily kWh, for a degradation trend."""
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    now_ms = int(time.time() * 1000)
+    start_ms = now_ms - days * 86_400_000
+    pv_rows = await history.aggregate(
+        serial, "ppv", start_ms, now_ms, group_by="day", fn="avg",
+        tz_offset_minutes=loc.tz_offset_minutes,
+    )
+    # Pull historical irradiance for the same window
+    from datetime import date as _date
+    today = _date.today()
+    start_d = (today - timedelta(days=days)).isoformat()
+    end_d = today.isoformat()
+    try:
+        arch = await weather_api.historical(loc.lat, loc.lon, start_d, end_d, tz=str(settings.get("tz", "auto")))
+    except Exception as exc:
+        return {"serial": serial, "error": f"weather archive failed: {exc}"}
+    hourly = arch.get("hourly") or {}
+    ghi_daily: dict[str, float] = {}
+    times = hourly.get("time") or []
+    ghis = hourly.get("shortwave_radiation") or []
+    for t, g in zip(times, ghis):
+        if g is None:
+            continue
+        day = t[:10]
+        ghi_daily[day] = ghi_daily.get(day, 0.0) + float(g)
+    out = []
+    for r in pv_rows:
+        d = r["bucket"]
+        actual = (r["value"] or 0) * 24 / 1000  # daily kWh estimate
+        expected = ghi_daily.get(d, 0.0) * loc.peak_kw * 0.8 / 1000  # rough
+        ratio = (actual / expected) if expected > 0 else None
+        out.append({"date": d, "actual_kwh": actual, "expected_kwh": expected, "ratio": ratio})
+    return {"serial": serial, "days": days, "rows": out}
+
+
+@app.get("/api/export.csv")
+async def export_csv(serial: str = Query(...), field: str = Query(default="ppv"),
+                     start: int = Query(...), end: int = Query(...),
+                     session: Session | None = Depends(require_read)):
+    """Stream raw samples as CSV for any (field, range)."""
+    points = await history.query(serial, field, start, end, max_points=100000)
+    from fastapi.responses import Response
+    lines = ["ts_ms,iso_utc,value"]
+    for p in points:
+        iso = datetime.fromtimestamp(p["ts"] / 1000, tz=timezone.utc).isoformat()
+        lines.append(f"{p['ts']},{iso},{p['value']}")
+    body = "\n".join(lines) + "\n"
+    return Response(content=body, media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{serial}_{field}.csv"'})
+
+
+@app.get("/api/alerts")
+async def list_alerts(site_id: str = Query(default="site-1"),
+                      limit: int = Query(default=50, ge=1, le=500),
+                      unacknowledged_only: bool = Query(default=False),
+                      session: Session | None = Depends(require_read)):
+    return {"site_id": site_id, "alerts": await history.list_alerts(site_id, limit, unacknowledged_only)}
+
+
+@app.post("/api/alerts/{alert_id}/ack")
+async def ack_alert(alert_id: int, session: Session | None = Depends(require_read)):
+    await history.acknowledge_alert(alert_id)
+    return {"ok": True}
+
+
+@app.get("/api/health")
+async def health():
+    return {"ok": True, "base_url": BASE_URL, "poll_interval": POLL_INTERVAL}
