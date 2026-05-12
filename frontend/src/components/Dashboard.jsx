@@ -5,6 +5,7 @@ import RawDataTable from "./RawDataTable.jsx";
 import HistoryChart from "./HistoryChart.jsx";
 import TodayChart from "./TodayChart.jsx";
 import BatteryForecast from "./BatteryForecast.jsx";
+import BatteryCycle from "./BatteryCycle.jsx";
 import Settings from "./Settings.jsx";
 import RangeChart from "./RangeChart.jsx";
 import ExcessChart from "./ExcessChart.jsx";
@@ -29,6 +30,7 @@ export default function Dashboard({ session, onLoggedOut }) {
   const [settingsBump, setSettingsBump] = useState(0);
   const [tzOffsetMinutes, setTzOffsetMinutes] = useState(null);
   const [siteId, setSiteId] = useState(null);
+  const [activeTab, setActiveTab] = useState("now");
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +114,7 @@ export default function Dashboard({ session, onLoggedOut }) {
           />
           {lastUpdate && <span>updated {lastUpdate.toLocaleTimeString()}</span>}
           <span>{session.username}</span>
+          <button onClick={() => window.print()} title="Print or save as PDF" className="no-print">Print</button>
           <button onClick={() => setSettingsOpen(true)}>Settings</button>
           <button onClick={() => logout(false)}>Sign out</button>
           <button
@@ -144,40 +147,75 @@ export default function Dashboard({ session, onLoggedOut }) {
         </div>
         <div className="main">
           {err && <div className="error">{err}</div>}
-          {selectedInv && (
-            <div className="panel">
-              <h3>{selectedInv.plantName || selectedInv.serialNum}</h3>
-              <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
-                SN {selectedInv.serialNum} · FW {selectedInv.fwVersion || "—"} · {selectedInv.phase || ""}
+
+          <div className="tabs no-print">
+            {[
+              ["now", "Now"],
+              ["today", "Today"],
+              ["battery", "Battery"],
+              ["history", "History"],
+              ["health", "Health & Alerts"],
+              ["all", "All"],
+            ].map(([id, label]) => (
+              <div
+                key={id}
+                className={`tab ${activeTab === id ? "active" : ""}`}
+                onClick={() => setActiveTab(id)}
+              >
+                {label}
               </div>
-              <LiveTiles snapshot={snapshot} />
-            </div>
-          )}
-          {selected && siteId && (
-            <SchedulerPanel key={`sch-${selected}-${siteId}`} serial={selected} siteId={siteId} />
-          )}
-          {selected && <WeatherPanel key={`wp-${selected}-${settingsBump}`} serial={selected} />}
-          {selected && <ExcessChart key={`ec-${selected}-${settingsBump}`} serial={selected} />}
-          {selected && <Heatmap key={`hm-${selected}-${settingsBump}`} serial={selected} />}
-          {selected && <HealthPanel key={`hp-${selected}-${settingsBump}`} serial={selected} />}
-          {siteId && <AlertsPanel key={`al-${siteId}`} siteId={siteId} />}
-          {siteId && <AppliancesPanel key={`ap-${siteId}`} siteId={siteId} />}
-          {selected && <BatteryForecast key={`bf-${selected}-${settingsBump}`} serial={selected} />}
-          {selected && <TodayChart key={`tc-${selected}-${settingsBump}`} serial={selected} />}
-          {selected && (
-            <RangeChart
-              key={`rc-${selected}-${settingsBump}`}
-              serial={selected}
-              tzOffsetMinutes={tzOffsetMinutes}
-            />
-          )}
-          {selected && <HistoryChart serial={selected} />}
-          {snapshot && (
-            <div className="panel">
-              <h3>Raw data</h3>
-              <RawDataTable snapshot={snapshot} />
-            </div>
-          )}
+            ))}
+          </div>
+
+          <div className={`tab-section ${activeTab === "now" || activeTab === "all" ? "active" : ""}`}>
+            {selectedInv && (
+              <div className="panel">
+                <h3>{selectedInv.plantName || selectedInv.serialNum}</h3>
+                <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                  SN {selectedInv.serialNum} · FW {selectedInv.fwVersion || "—"} · {selectedInv.phase || ""}
+                </div>
+                <LiveTiles snapshot={snapshot} />
+              </div>
+            )}
+            {selected && <WeatherPanel key={`wp-${selected}-${settingsBump}`} serial={selected} />}
+            {snapshot && (
+              <div className="panel">
+                <h3>Raw data</h3>
+                <RawDataTable snapshot={snapshot} />
+              </div>
+            )}
+          </div>
+
+          <div className={`tab-section ${activeTab === "today" || activeTab === "all" ? "active" : ""}`}>
+            {selected && <TodayChart key={`tc-${selected}-${settingsBump}`} serial={selected} />}
+            {selected && <ExcessChart key={`ec-${selected}-${settingsBump}`} serial={selected} />}
+            {selected && siteId && (
+              <SchedulerPanel key={`sch-${selected}-${siteId}`} serial={selected} siteId={siteId} />
+            )}
+          </div>
+
+          <div className={`tab-section ${activeTab === "battery" || activeTab === "all" ? "active" : ""}`}>
+            {selected && <BatteryForecast key={`bf-${selected}-${settingsBump}`} serial={selected} />}
+            {selected && <BatteryCycle key={`bc-${selected}-${settingsBump}`} serial={selected} />}
+          </div>
+
+          <div className={`tab-section ${activeTab === "history" || activeTab === "all" ? "active" : ""}`}>
+            {selected && (
+              <RangeChart
+                key={`rc-${selected}-${settingsBump}`}
+                serial={selected}
+                tzOffsetMinutes={tzOffsetMinutes}
+              />
+            )}
+            {selected && <Heatmap key={`hm-${selected}-${settingsBump}`} serial={selected} />}
+            {selected && <HistoryChart serial={selected} />}
+          </div>
+
+          <div className={`tab-section ${activeTab === "health" || activeTab === "all" ? "active" : ""}`}>
+            {selected && <HealthPanel key={`hp-${selected}-${settingsBump}`} serial={selected} />}
+            {siteId && <AlertsPanel key={`al-${siteId}`} siteId={siteId} />}
+            {siteId && <AppliancesPanel key={`ap-${siteId}`} siteId={siteId} />}
+          </div>
         </div>
       </div>
       <Settings

@@ -54,10 +54,14 @@ async def _fetch_json(url: str, params: dict[str, Any]) -> dict[str, Any]:
 
 
 async def forecast(
-    lat: float, lon: float, days: int = 7, tz: str = "auto"
+    lat: float, lon: float, days: int = 7, tz: str = "auto", past_days: int = 0
 ) -> dict[str, Any]:
-    """Hourly forecast for the next `days` days at (lat, lon)."""
-    key = ("forecast", round(lat, 4), round(lon, 4), days, tz)
+    """Hourly forecast for the next `days` days at (lat, lon).
+
+    `past_days` extends the response backwards using Open-Meteo's measured
+    values for the recent past (covers today and the few days before, which
+    the archive endpoint does not yet have)."""
+    key = ("forecast", round(lat, 4), round(lon, 4), days, tz, past_days)
     async with _lock:
         cached = _cache.get(key)
         if cached and (time.time() - cached[0] < _CACHE_TTL):
@@ -98,6 +102,8 @@ async def forecast(
         "wind_speed_unit": "mph",
         "temperature_unit": "fahrenheit",  # San Felipe lives in °F
     }
+    if past_days > 0:
+        params["past_days"] = past_days
     data = await _fetch_json(FORECAST_URL, params)
     async with _lock:
         _cache[key] = (time.time(), data)

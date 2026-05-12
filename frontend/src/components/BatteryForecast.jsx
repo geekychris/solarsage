@@ -77,7 +77,7 @@ export default function BatteryForecast({ serial }) {
           <div className="value">{data.current_soc_pct ?? "—"}<span className="unit">%</span></div>
         </div>
         <div className="forecast-tile">
-          <div className="label">Charge rate</div>
+          <div className="label">Charge rate (now)</div>
           <div className="value">
             {data.measured_rate_pct_per_min != null
               ? (data.measured_rate_pct_per_min * 60).toFixed(1)
@@ -86,17 +86,60 @@ export default function BatteryForecast({ serial }) {
           </div>
         </div>
         <div className="forecast-tile">
-          <div className="label">100% ETA</div>
+          <div className="label">Model ETA</div>
           <div className="value" style={{ fontSize: 18 }}>{fmtETA(data.eta_iso)}</div>
+          <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+            in {fmtDuration(data.minutes_remaining)} · {data.used_historical ? "hist curve" : "rate × time"}
+          </div>
         </div>
         <div className="forecast-tile">
-          <div className="label">Time remaining</div>
-          <div className="value">{fmtDuration(data.minutes_remaining)}</div>
+          <div className="label">Historical ETA</div>
+          <div className="value" style={{ fontSize: 18 }}>
+            {fmtETA(data.historical_eta?.eta_iso)}
+          </div>
+          <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+            {data.historical_eta?.matched_days > 0
+              ? `in ${fmtDuration(data.historical_eta.median_minutes_to_full)} (median of ${data.historical_eta.matched_days})`
+              : "no past day matched"}
+          </div>
         </div>
       </div>
 
+      {data.historical_eta?.matches?.length > 0 && (
+        <details style={{ marginTop: 10 }}>
+          <summary className="muted" style={{ fontSize: 12, cursor: "pointer" }}>
+            Show how today's SoC matched past days
+          </summary>
+          <table className="kv-table" style={{ marginTop: 6 }}>
+            <thead>
+              <tr>
+                <td>Day</td>
+                <td>Matched SoC at</td>
+                <td>Reached 100% at</td>
+                <td>Elapsed</td>
+              </tr>
+            </thead>
+            <tbody>
+              {data.historical_eta.matches.map((m) => (
+                <tr key={m.date}>
+                  <td>{m.date}</td>
+                  <td>{m.matched_soc}% @ {m.matched_at_local}</td>
+                  <td>{m.full_at_local}</td>
+                  <td>{fmtDuration(Math.round(m.elapsed_minutes))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
+
       {data.reason && (
         <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>{data.reason}</div>
+      )}
+      {data.historical_eta?.reason && !data.historical_eta?.matched_days && (
+        <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+          Historical ETA: {data.historical_eta.reason}
+        </div>
       )}
 
       {rows.length > 0 && (

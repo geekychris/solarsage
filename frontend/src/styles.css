@@ -296,6 +296,15 @@ select, input {
   border-bottom-color: var(--accent-2);
 }
 
+/* Tabbed dashboard sections: hidden unless the matching tab is active.
+   All panels stay mounted so their pollers + state survive tab switches. */
+.tab-section { display: none; }
+.tab-section.active {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .empty {
   padding: 24px;
   text-align: center;
@@ -452,3 +461,96 @@ select, input {
 .alert-when { font-size: 11px; color: var(--muted); }
 .alert-text { margin-top: 2px; font-size: 13px; }
 .alert-rule { font-size: 11px; margin-top: 2px; }
+
+/* Print / Save-as-PDF: light theme, full-width, no clipped charts. */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0.4in;
+  }
+
+  :root { color-scheme: light; }
+
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html, body, .app, .dashboard, .main {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Hide interactive chrome that has no place on paper */
+  .topbar,
+  .sidebar,
+  .toolbar,
+  .modal-backdrop,
+  .recharts-brush,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Show every tab section when printing, regardless of which tab is active */
+  .tab-section {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  /* Single column, full page width */
+  .dashboard {
+    display: block !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+  .main {
+    gap: 10px !important;
+  }
+
+  /* Panels: white background, keep each on a single page where possible */
+  .panel, .tile, .forecast-tile {
+    background: #fff !important;
+    color: #000 !important;
+    border: 1px solid #cfd3d8 !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .muted { color: #555 !important; }
+  .error { color: #a00 !important; background: #fee !important; }
+
+  /* Long tables can split across pages — better than scaling them to unreadable */
+  .panel:has(table) {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+  .appliance-table tr,
+  .kv-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Inline scrollers (heatmap, BatteryCycle table) — show full content, no clip */
+  .panel [style*="overflow-x: auto"],
+  .panel [style*="overflow-x:auto"],
+  .panel [style*="overflow: auto"] {
+    overflow: visible !important;
+  }
+
+  /* Recharts: never wider than the page */
+  .recharts-wrapper,
+  .recharts-responsive-container {
+    max-width: 100% !important;
+  }
+
+  /* Make Recharts axis/text legible on paper */
+  .recharts-cartesian-axis-tick text,
+  .recharts-legend-item text,
+  .recharts-text {
+    fill: #222 !important;
+  }
+  .recharts-cartesian-grid line {
+    stroke: #d8dde3 !important;
+  }
+}

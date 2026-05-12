@@ -325,6 +325,106 @@ async def max_production_envelope(loc: LocationConfig) -> list[dict]:
     return out
 
 
+async def historical_completion(
+    history: History,
+    serial: str,
+    loc: LocationConfig,
+    current_soc: float,
+    now_local: datetime,
+    days: int = 7,
+    soc_tolerance: float = 2.0,
+    full_threshold: float = 99.0,
+) -> dict:
+    """Empirical "when will it hit 100%?" from the past `days` of SoC history.
+
+    For each prior day, walk the SoC samples after the day's trough; find the
+    first time SoC was within `soc_tolerance` of `current_soc`, then find the
+    first time it reached `full_threshold`. The elapsed minutes from match →
+    full is one observation. Median across days gives the historical ETA.
+
+    Matching ignores days that never reached full and days where SoC never
+    matched (e.g. today's current SoC is higher than past days reached).
+    """
+    # Prefer the aggregate `soc` field — the per-unit `unit0_soc` only gets
+    # written for live snapshots, not for backfilled days, so it's sparse.
+    soc_field = await pick_field(history, serial, ("soc", "batterySoc", "unit0_soc"))
+    if not soc_field:
+        return {"matches": [], "median_minutes_to_full": None, "eta_iso": None,
+                "matched_days": 0, "considered_days": 0,
+                "reason": "no SoC field in history"}
+
+    tz = timezone(timedelta(minutes=loc.tz_offset_minutes))
+    today_local = now_local.date()
+    matches: list[dict] = []
+
+    for back in range(1, days + 1):
+        d = today_local - timedelta(days=back)
+        day_start_local = datetime(d.year, d.month, d.day, 0, 0, tzinfo=tz)
+        # Look 42h forward to capture cross-midnight full-charge events
+        start_ms = int(day_start_local.astimezone(timezone.utc).timestamp() * 1000)
+        end_ms = start_ms + 42 * 3_600_000
+        pts = await history.query(serial, soc_field, start_ms, end_ms, max_points=240)
+        if len(pts) < 10:
+            continue
+
+        values = [p["value"] for p in pts]
+        ts = [p["ts"] for p in pts]
+        min_idx = min(range(len(values)), key=lambda i: values[i])
+
+        # Charge phase = from trough onward
+        match_idx = None
+        for i in range(min_idx, len(values)):
+            if abs(values[i] - current_soc) <= soc_tolerance:
+                match_idx = i
+                break
+        if match_idx is None:
+            continue
+
+        # Only credit a "full" event within 8h of the match. Past 8h almost
+        # always means the day in question didn't actually complete a charge
+        # cycle from the matched SoC (e.g. a partial-data day spilled over
+        # into the next day's recharge), which would skew the median.
+        match_horizon_ms = ts[match_idx] + 8 * 3_600_000
+        full_idx = None
+        for i in range(match_idx, len(values)):
+            if ts[i] > match_horizon_ms:
+                break
+            if values[i] >= full_threshold:
+                full_idx = i
+                break
+        if full_idx is None:
+            continue
+
+        elapsed_min = (ts[full_idx] - ts[match_idx]) / 60_000
+        matched_local = datetime.fromtimestamp(ts[match_idx] / 1000, tz=timezone.utc).astimezone(tz)
+        full_local = datetime.fromtimestamp(ts[full_idx] / 1000, tz=timezone.utc).astimezone(tz)
+        matches.append({
+            "date": d.isoformat(),
+            "matched_at_local": matched_local.strftime("%H:%M"),
+            "matched_soc": round(values[match_idx], 1),
+            "full_at_local": full_local.strftime("%H:%M"),
+            "elapsed_minutes": round(elapsed_min, 1),
+        })
+
+    if not matches:
+        return {"matches": [], "median_minutes_to_full": None, "eta_iso": None,
+                "matched_days": 0, "considered_days": days,
+                "reason": f"no past day in the last {days} had SoC matching {current_soc:.0f}% during its charge phase"}
+
+    elapsed = sorted(m["elapsed_minutes"] for m in matches)
+    median = elapsed[len(elapsed) // 2] if len(elapsed) % 2 else (elapsed[len(elapsed)//2 - 1] + elapsed[len(elapsed)//2]) / 2
+    eta_local = now_local + timedelta(minutes=median)
+    return {
+        "matches": matches,
+        "matched_days": len(matches),
+        "considered_days": days,
+        "median_minutes_to_full": round(median, 1),
+        "min_minutes_to_full": round(min(elapsed), 1),
+        "max_minutes_to_full": round(max(elapsed), 1),
+        "eta_iso": eta_local.isoformat(),
+    }
+
+
 async def battery_completion(
     history: History, serial: str, loc: LocationConfig
 ) -> dict:
@@ -399,6 +499,8 @@ async def battery_completion(
             eta_local = t_local
             break
 
+    historical = await historical_completion(history, serial, loc, cur_soc, now_local)
+
     return {
         "current_soc_pct": round(cur_soc, 2),
         "measured_rate_pct_per_min": measured_rate,
@@ -409,4 +511,5 @@ async def battery_completion(
         "step_minutes": step_min,
         "projection": projection,
         "used_historical": bool(hist_pv),
+        "historical_eta": historical,
     }

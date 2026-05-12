@@ -1378,6 +1378,206 @@ async def ack_alert(alert_id: int, session: Session | None = Depends(require_rea
     return {"ok": True}
 
 
+def _analyze_day_cycle(
+    soc_points: list[dict],
+    day_start_ms: int,
+    day_end_ms: int,
+    capacity_kwh: float,
+) -> dict | None:
+    """Pull the day's drain/charge events out of a list of SoC samples.
+
+    `soc_points` should cover [day_start_ms, day_start_ms + ~36h] sorted ASC.
+    The drain cycle that *starts* in this calendar day is what gets reported —
+    its trough and recovery may extend into the next day, which is why we want
+    extra lookahead beyond `day_end_ms`.
+    """
+    if not soc_points or len(soc_points) < 5:
+        return None
+
+    values = [p["value"] for p in soc_points]
+    ts = [p["ts"] for p in soc_points]
+
+    # Peak SoC within the calendar day (this is "today is fully charged" point)
+    in_day = [i for i, t in enumerate(ts) if day_start_ms <= t < day_end_ms]
+    if not in_day:
+        return None
+    peak_idx = max(in_day, key=lambda i: values[i])
+    # Use the LATEST index that's at the peak value — that's when drain begins
+    peak_val = values[peak_idx]
+    last_at_peak = max(
+        (i for i in in_day if values[i] >= peak_val - 0.5),
+        default=peak_idx,
+    )
+
+    # Trough: lowest SoC in the next 24h after the peak (may cross midnight)
+    look_end = ts[last_at_peak] + 24 * 3_600_000
+    after = [i for i in range(last_at_peak, len(values)) if ts[i] <= look_end]
+    if len(after) < 2:
+        # Not enough lookahead — fall back to within-day min
+        min_idx = min(in_day, key=lambda i: values[i])
+    else:
+        min_idx = min(after, key=lambda i: values[i])
+
+    min_val = values[min_idx]
+    drop_pct = max(0.0, peak_val - min_val)
+
+    drain_start_idx = None
+    charge_start_idx = None
+    full_idx = None
+
+    if drop_pct >= 3 and min_idx > last_at_peak:
+        # Drain start = latest sample at/near peak before the trough
+        for i in range(min_idx - 1, last_at_peak - 1, -1):
+            if values[i] >= peak_val - 1.5:
+                drain_start_idx = i
+                break
+        if drain_start_idx is None:
+            drain_start_idx = last_at_peak
+
+        # Charge start = first sample after trough where SoC has risen by >=2%
+        for i in range(min_idx + 1, len(values)):
+            if values[i] >= min_val + 2:
+                charge_start_idx = i
+                break
+
+        # Fully charged again = first sample at/near peak after charge start
+        if charge_start_idx is not None:
+            target = max(peak_val, 95) - 1
+            for i in range(charge_start_idx, len(values)):
+                if values[i] >= target:
+                    full_idx = i
+                    break
+
+    def at(i: int | None) -> tuple[int | None, float | None]:
+        if i is None:
+            return None, None
+        return int(ts[i]), float(values[i])
+
+    peak_ts, _ = at(last_at_peak)
+    min_ts, _ = at(min_idx)
+    drain_ts, drain_soc = at(drain_start_idx)
+    charge_ts, charge_soc = at(charge_start_idx)
+    full_ts, full_val = at(full_idx)
+
+    return {
+        "peak_ts": peak_ts, "peak_soc": float(peak_val),
+        "min_ts": min_ts, "min_soc": float(min_val),
+        "drain_start_ts": drain_ts, "drain_start_soc": drain_soc,
+        "charge_start_ts": charge_ts, "charge_start_soc": charge_soc,
+        "full_charge_ts": full_ts, "full_charge_soc": full_val,
+        "drain_pct": round(drop_pct, 1),
+        "drain_kwh": round(drop_pct / 100.0 * capacity_kwh, 2),
+        "samples": len(in_day),
+    }
+
+
+@app.get("/api/battery_cycles")
+async def battery_cycles(
+    serial: str = Query(..., alias="serial"),
+    days: int = Query(default=14, ge=1, le=60),
+    session: Session | None = Depends(require_read),
+):
+    """Per-day battery drain/charge events plus daily temperature range.
+
+    Powers the "Battery vs temperature" panel — one row per local day with:
+    - when the battery started draining (latest peak-SoC sample before the trough)
+    - how far it drained (% and kWh, against the configured battery capacity)
+    - when it started charging again (first significant SoC rise after the trough)
+    - when it reached "full" (SoC back to peak / 95%+)
+    - daily min / max / avg outdoor temperature in °F
+    """
+    settings = await _load_settings()
+    loc = _location_from(settings)
+    tz_off = loc.tz_offset_minutes
+    capacity_kwh = float(loc.battery_capacity_kwh or 14.3)
+
+    known = await history.known_fields(serial)
+    soc_field = next((f for f in ("soc", "unit0_soc", "batterySoc") if f in known), None)
+    if not soc_field:
+        return {
+            "serial": serial,
+            "tz_offset_minutes": tz_off,
+            "battery_capacity_kwh": capacity_kwh,
+            "soc_field": None,
+            "days": [],
+            "note": "no SoC field in history",
+        }
+
+    today_local = datetime.now(timezone.utc).astimezone(
+        timezone(timedelta(minutes=tz_off))
+    ).date()
+
+    # Pull temps for the whole window in one Open-Meteo call. past_days covers
+    # recent days (incl. today) that the archive endpoint doesn't have yet.
+    temp_by_date: dict[str, dict[str, float]] = {}
+    try:
+        wx = await weather_api.forecast(
+            loc.lat, loc.lon, days=1, tz=str(settings.get("tz", "auto")),
+            past_days=days,
+        )
+        daily = wx.get("daily") or {}
+        for d, tmin, tmax in zip(
+            daily.get("time") or [],
+            daily.get("temperature_2m_min") or [],
+            daily.get("temperature_2m_max") or [],
+        ):
+            temp_by_date[d] = {
+                "temp_min_f": float(tmin) if tmin is not None else None,
+                "temp_max_f": float(tmax) if tmax is not None else None,
+            }
+        hourly = wx.get("hourly") or {}
+        avg_acc: dict[str, list[float]] = {}
+        for t, temp in zip(
+            hourly.get("time") or [],
+            hourly.get("temperature_2m") or [],
+        ):
+            if temp is None:
+                continue
+            d = t[:10]
+            avg_acc.setdefault(d, []).append(float(temp))
+        for d, vals in avg_acc.items():
+            entry = temp_by_date.setdefault(d, {})
+            entry["temp_avg_f"] = round(sum(vals) / len(vals), 1)
+    except Exception as exc:
+        log.warning("battery_cycles: weather lookup failed: %s", exc)
+
+    out_days = []
+    for back in range(days - 1, -1, -1):
+        d = today_local - timedelta(days=back)
+        date_text = d.isoformat()
+        day_start = datetime(
+            d.year, d.month, d.day, 0, 0,
+            tzinfo=timezone(timedelta(minutes=tz_off)),
+        )
+        start_ms = int(day_start.astimezone(timezone.utc).timestamp() * 1000)
+        end_ms = start_ms + 86_400_000
+        # Look 18h past midnight so cross-midnight drain + full-recharge complete
+        # (typical "back to 100%" lands ~12:00-14:00 the next day) are visible.
+        look_end_ms = start_ms + 42 * 3_600_000
+        pts = await history.query(serial, soc_field, start_ms, look_end_ms, max_points=240)
+        analysis = (
+            _analyze_day_cycle(pts, start_ms, end_ms, capacity_kwh) if pts else None
+        )
+        temps = temp_by_date.get(date_text) or {}
+        out_days.append({
+            "date": date_text,
+            "start_ms": start_ms,
+            "end_ms": end_ms,
+            **(analysis or {"samples": len(pts)}),
+            "temp_min_f": temps.get("temp_min_f"),
+            "temp_max_f": temps.get("temp_max_f"),
+            "temp_avg_f": temps.get("temp_avg_f"),
+        })
+
+    return {
+        "serial": serial,
+        "tz_offset_minutes": tz_off,
+        "battery_capacity_kwh": capacity_kwh,
+        "soc_field": soc_field,
+        "days": out_days,
+    }
+
+
 @app.get("/api/health")
 async def health():
     return {"ok": True, "base_url": BASE_URL, "poll_interval": POLL_INTERVAL}

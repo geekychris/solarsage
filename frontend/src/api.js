@@ -143,4 +143,8 @@ export const api = {
     request(`/api/diagnostic?serial=${encodeURIComponent(serial)}`),
   summary: (serial, days = 30) =>
     request(`/api/summary?serial=${encodeURIComponent(serial)}&days=${days}`),
+  batteryCycles: (serial, days = 14) =>
+    request(
+      `/api/battery_cycles?serial=${encodeURIComponent(serial)}&days=${days}`
+    ),
 };
