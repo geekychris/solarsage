@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api, setToken } from "../api.js";
 import LiveTiles from "./LiveTiles.jsx";
+import PowerFlow from "./PowerFlow.jsx";
 import RawDataTable from "./RawDataTable.jsx";
 import HistoryChart from "./HistoryChart.jsx";
 import TodayChart from "./TodayChart.jsx";
@@ -167,6 +168,7 @@ export default function Dashboard({ session, onLoggedOut }) {
           </div>
 
           <div className={`tab-section ${activeTab === "now" || activeTab === "all" ? "active" : ""}`}>
+            {selected && <PowerFlow snapshot={snapshot} />}
             {selectedInv && (
               <div className="panel">
                 <h3>{selectedInv.plantName || selectedInv.serialNum}</h3>
