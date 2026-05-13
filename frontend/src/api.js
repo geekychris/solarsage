@@ -31,8 +31,30 @@ async function getLocalHandlers() {
 async function dispatchLocal(path, opts) {
   const handlers = await getLocalHandlers();
   const url = new URL(path, "http://local");
-  const route = `${opts.method || "GET"} ${url.pathname}`;
-  const handler = handlers[route];
+  const method = opts.method || "GET";
+  const route = `${method} ${url.pathname}`;
+  let handler = handlers[route];
+  let params = {};
+  if (!handler) {
+    // Fall back to pattern routes ("DELETE /api/appliances/:id"). Keep this
+    // path off the hot list — exact-match wins on every request.
+    for (const key of Object.keys(handlers)) {
+      if (!key.includes(":")) continue;
+      const spaceIdx = key.indexOf(" ");
+      if (key.slice(0, spaceIdx) !== method) continue;
+      const names = [];
+      const pattern = key.slice(spaceIdx + 1).replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_, n) => {
+        names.push(n);
+        return "([^/]+)";
+      });
+      const m = url.pathname.match(new RegExp(`^${pattern}$`));
+      if (m) {
+        handler = handlers[key];
+        names.forEach((n, i) => (params[n] = decodeURIComponent(m[i + 1])));
+        break;
+      }
+    }
+  }
   if (!handler) {
     const err = new Error(`No local handler for ${route}`);
     err.status = 404;
@@ -40,6 +62,7 @@ async function dispatchLocal(path, opts) {
   }
   return await handler({
     query: Object.fromEntries(url.searchParams),
+    params,
     body: opts.body,
   });
 }

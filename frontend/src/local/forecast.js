@@ -515,6 +515,44 @@ export async function stringHealth(query) {
   return { serial: query.serial, strings, series, health };
 }
 
+// Actual daily PV kWh vs irradiance-expected daily kWh, for a degradation trend.
+// Mirrors backend/app/main.py `/api/performance`.
+export async function performance(query) {
+  const s = await getSettings();
+  const serial = query.serial;
+  const days = Math.max(1, Number(query.days) || 30);
+  const now = Date.now();
+  const start = now - days * 86_400_000;
+  const pvRows = await history.aggregate(
+    serial, "ppv", start, now, "day", "avg", s.tz_offset_minutes,
+  );
+  const today = new Date(now + s.tz_offset_minutes * 60_000).toISOString().slice(0, 10);
+  const startDate = new Date(now - days * 86_400_000 + s.tz_offset_minutes * 60_000).toISOString().slice(0, 10);
+  let arch;
+  try {
+    arch = await weather.historical(startDate, today);
+  } catch (ex) {
+    return { serial, error: `weather archive failed: ${ex.message}` };
+  }
+  const hourly = arch.hourly || {};
+  const times = hourly.time || [];
+  const ghis = hourly.shortwave_radiation || [];
+  const ghiDaily = {};
+  for (let i = 0; i < times.length; i++) {
+    const g = ghis[i];
+    if (g == null) continue;
+    const day = String(times[i]).slice(0, 10);
+    ghiDaily[day] = (ghiDaily[day] || 0) + Number(g);
+  }
+  const rows = pvRows.map((r) => {
+    const actual = (r.value || 0) * 24 / 1000; // avg-W → daily kWh estimate
+    const expected = (ghiDaily[r.bucket] || 0) * s.peak_kw * 0.8 / 1000;
+    const ratio = expected > 0 ? actual / expected : null;
+    return { date: r.bucket, actual_kwh: actual, expected_kwh: expected, ratio };
+  });
+  return { serial, days, rows };
+}
+
 // ---------------------------------------------------------------------------
 // battery_cycles (the recently-added panel)
 // ---------------------------------------------------------------------------

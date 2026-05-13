@@ -12,6 +12,7 @@ import { history } from "./history.js";
 import { poller } from "./poller.js";
 import * as forecast from "./forecast.js";
 import * as weather from "./weather.js";
+import { seedForSite } from "./appliancesCatalog.js";
 
 function notImplemented(name) {
   return async () => {
@@ -137,15 +138,39 @@ export const handlers = {
   "POST /api/backfill": async ({ query }) =>
     eg4.syncHistory(query.serial, Number(query.days) || 14),
 
-  // --- Things we'll wire later (multi-site, appliances, scheduler, alerts) ---
+  // --- Appliances (local CRUD against SQLite) ---
+  "GET /api/appliances": async ({ query }) => {
+    const siteId = query.site_id || "site-1";
+    let appliances = await history.listAppliances(siteId);
+    if (!appliances.length) {
+      // First time we're asked — seed the default catalog so the user has
+      // something to enable/disable, matching the backend's upsert_site flow.
+      for (const a of seedForSite(siteId)) await history.upsertAppliance(a);
+      appliances = await history.listAppliances(siteId);
+    }
+    return { site_id: siteId, appliances };
+  },
+  "POST /api/appliances": async ({ body }) => {
+    if (!body?.site_id || !body?.name || body.watts == null) {
+      throw Object.assign(new Error("site_id, name, watts required"), { status: 400 });
+    }
+    const id = await history.upsertAppliance(body);
+    return { id };
+  },
+  "DELETE /api/appliances/:id": async ({ params, query }) => {
+    await history.deleteAppliance(params.id, query.site_id || "site-1");
+    return { ok: true };
+  },
+
+  // --- Performance trend (actual vs irradiance-expected kWh) ---
+  "GET /api/performance": async ({ query }) => forecast.performance(query),
+
+  // --- Things still pending (multi-site, scheduler) ---
   "GET /api/sites": notImplemented("sites"),
   "POST /api/sites": notImplemented("upsert site"),
-  "GET /api/appliances": notImplemented("appliances"),
-  "POST /api/appliances": notImplemented("upsert appliance"),
   "GET /api/schedule": notImplemented("schedule"),
   "GET /api/heatmap": async ({ query }) => forecast.heatmap(query),
   "GET /api/string_health": async ({ query }) => forecast.stringHealth(query),
-  "GET /api/performance": notImplemented("performance"),
   "GET /api/alerts": async ({ query }) => ({ site_id: query.site_id, alerts: [] }),
   "POST /api/alerts/ack": async () => ({ ok: true }),
   "GET /api/health": async () => ({ ok: true, native: true }),

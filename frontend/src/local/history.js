@@ -28,6 +28,19 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS appliances (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  site_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  watts REAL NOT NULL,
+  typical_minutes INTEGER NOT NULL DEFAULT 60,
+  can_defer INTEGER NOT NULL DEFAULT 1,
+  preferred_start_hour INTEGER,
+  preferred_end_hour INTEGER,
+  enabled INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_appliances_site ON appliances(site_id);
 `;
 
 class History {
@@ -265,6 +278,56 @@ class History {
       values: [k, v],
     }));
     if (stmts.length) await db.executeSet(stmts);
+  }
+
+  async listAppliances(siteId) {
+    const db = await this._init();
+    const r = await db.query(
+      "SELECT * FROM appliances WHERE site_id=? ORDER BY id",
+      [siteId],
+    );
+    return r.values || [];
+  }
+
+  async upsertAppliance(a) {
+    const db = await this._init();
+    if (a.id) {
+      await db.run(
+        "UPDATE appliances SET name=?, watts=?, typical_minutes=?, can_defer=?," +
+          " preferred_start_hour=?, preferred_end_hour=?, enabled=?" +
+          " WHERE id=? AND site_id=?",
+        [
+          a.name, a.watts, a.typical_minutes ?? 60,
+          a.can_defer != null ? Number(a.can_defer) : 1,
+          a.preferred_start_hour ?? null,
+          a.preferred_end_hour ?? null,
+          a.enabled != null ? Number(a.enabled) : 1,
+          a.id, a.site_id,
+        ],
+      );
+      return a.id;
+    }
+    const r = await db.run(
+      "INSERT INTO appliances (site_id, name, watts, typical_minutes," +
+        " can_defer, preferred_start_hour, preferred_end_hour, enabled)" +
+        " VALUES (?,?,?,?,?,?,?,?)",
+      [
+        a.site_id, a.name, a.watts, a.typical_minutes ?? 60,
+        a.can_defer != null ? Number(a.can_defer) : 1,
+        a.preferred_start_hour ?? null,
+        a.preferred_end_hour ?? null,
+        a.enabled != null ? Number(a.enabled) : 1,
+      ],
+    );
+    return r?.changes?.lastId ?? null;
+  }
+
+  async deleteAppliance(id, siteId) {
+    const db = await this._init();
+    await db.run(
+      "DELETE FROM appliances WHERE id=? AND site_id=?",
+      [Number(id), siteId],
+    );
   }
 }
 
