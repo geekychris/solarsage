@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { api, setToken } from "../api.js";
 
+const IS_NATIVE = typeof window !== "undefined"
+  && window.Capacitor
+  && window.Capacitor.isNativePlatform
+  && window.Capacitor.isNativePlatform();
+
 export default function Login({ onLoggedIn }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -49,8 +54,9 @@ export default function Login({ onLoggedIn }) {
         </div>
         {status?.credentials_persisted && (
           <div className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-            Saved credentials are on file — the backend will auto-login on restart.
-            Re-enter to overwrite, or sign out with "forget" to clear.
+            Saved credentials are on file — {IS_NATIVE ? "the app" : "the backend"}{" "}
+            will auto-login on restart. Re-enter to overwrite, or sign out with
+            "forget" to clear.
           </div>
         )}
         {err && <div className="error">{err}</div>}
@@ -84,14 +90,15 @@ export default function Login({ onLoggedIn }) {
             checked={remember}
             onChange={(e) => setRemember(e.target.checked)}
           />
-          Remember me — save credentials so the backend auto-logs in on restart
+          Remember me — sign in automatically next time
         </label>
         <button className="primary" type="submit" disabled={busy} style={{ width: "100%" }}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
         <div className="muted" style={{ fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
-          Saved credentials live in <code>backend/credentials.json</code> on this
-          machine, mode 0600. Local-only app — don't expose port 8000 publicly.
+          {IS_NATIVE
+            ? "Credentials are stored in the device Keychain. They never leave the app — sign in talks directly to monitor.eg4electronics.com."
+            : "Saved credentials live in backend/credentials.json on this machine, mode 0600. Local-only app — don't expose port 8000 publicly."}
         </div>
       </form>
     </div>

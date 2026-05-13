@@ -305,7 +305,10 @@ async def use_saved():
 
 @app.get("/api/inverters")
 async def list_inverters(session: Session = Depends(require_session)):
-    return {"inverters": [_inverter_to_dict(i) for i in session.client.get_inverters()]}
+    return {
+        "username": session.username,
+        "inverters": [_inverter_to_dict(i) for i in session.client.get_inverters()],
+    }
 
 
 async def _fetch(session: Session, serial: str, method: str) -> dict[str, Any]:

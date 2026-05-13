@@ -3,6 +3,7 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -10,6 +11,11 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "../api.js";
+import { useChartZoom } from "./useChartZoom.js";
+
+function fmtTimeOfDay(ts) {
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 
 function fmtETA(iso) {
   if (!iso) return "—";
@@ -26,6 +32,7 @@ function fmtDuration(min) {
 export default function BatteryForecast({ serial }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
+  const zoom = useChartZoom({ minSpan: 60_000 });
 
   useEffect(() => {
     if (!serial) return;
@@ -143,34 +150,67 @@ export default function BatteryForecast({ serial }) {
       )}
 
       {rows.length > 0 && (
-        <div style={{ width: "100%", height: 260, marginTop: 12 }}>
-          <ResponsiveContainer>
-            <LineChart data={rows} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke="#232a35" strokeDasharray="3 3" />
-              <XAxis dataKey="label" stroke="#8b97a8" tick={{ fill: "#8b97a8", fontSize: 11 }} />
-              <YAxis
-                stroke="#8b97a8"
-                domain={[0, 100]}
-                tick={{ fill: "#8b97a8", fontSize: 11 }}
-                label={{ value: "SoC %", angle: -90, position: "insideLeft", fill: "#8b97a8", fontSize: 11 }}
-              />
-              <Tooltip
-                contentStyle={{ background: "#151a22", border: "1px solid #232a35" }}
-                labelStyle={{ color: "#8b97a8" }}
-              />
-              <ReferenceLine y={100} stroke="#2ea043" strokeDasharray="3 3" />
-              <Line
-                type="monotone"
-                dataKey="soc"
-                stroke="#58a6ff"
-                strokeWidth={3}
-                dot={false}
-                isAnimationActive={false}
-                name="Projected SoC"
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        <>
+          {zoom.isZoomed && (
+            <button onClick={zoom.reset} style={{ marginTop: 6 }}>Reset zoom</button>
+          )}
+          <div className="chart-wrap" style={{ height: 260, marginTop: 12, userSelect: "none" }}>
+            <ResponsiveContainer>
+              <LineChart
+                data={rows}
+                margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
+                {...zoom.chartProps}
+              >
+                <CartesianGrid stroke="#232a35" strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="ts"
+                  type="number"
+                  domain={zoom.domain}
+                  allowDataOverflow
+                  scale="time"
+                  stroke="#8b97a8"
+                  tick={{ fill: "#8b97a8", fontSize: 11 }}
+                  tickFormatter={fmtTimeOfDay}
+                  minTickGap={40}
+                />
+                <YAxis
+                  stroke="#8b97a8"
+                  domain={[0, 100]}
+                  tick={{ fill: "#8b97a8", fontSize: 11 }}
+                  label={{ value: "SoC %", angle: -90, position: "insideLeft", fill: "#8b97a8", fontSize: 11 }}
+                />
+                <Tooltip
+                  contentStyle={{ background: "#151a22", border: "1px solid #232a35" }}
+                  labelStyle={{ color: "#8b97a8" }}
+                  labelFormatter={fmtTimeOfDay}
+                />
+                <ReferenceLine y={100} stroke="#2ea043" strokeDasharray="3 3" />
+                {zoom.refArea && (
+                  <ReferenceArea x1={zoom.refArea.x1} x2={zoom.refArea.x2} fill="#58a6ff" fillOpacity={0.15} />
+                )}
+                {zoom.crosshairs.map((p) => (
+                  <ReferenceLine
+                    key={`xh-${p.dataKey}`}
+                    y={p.value}
+                    stroke={p.color}
+                    strokeDasharray="2 3"
+                    strokeOpacity={0.55}
+                    ifOverflow="extendDomain"
+                  />
+                ))}
+                <Line
+                  type="monotone"
+                  dataKey="soc"
+                  stroke="#58a6ff"
+                  strokeWidth={3}
+                  dot={false}
+                  isAnimationActive={false}
+                  name="Projected SoC"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </>
       )}
     </div>
   );

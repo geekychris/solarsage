@@ -42,3 +42,31 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Capacitor / iOS
+frontend/ios/App/build/
+frontend/ios/App/Pods/
+frontend/ios/App/Podfile.lock
+frontend/ios/App/App/public/
+frontend/ios/App/App/capacitor.config.json
+frontend/ios/App/App/config.xml
+frontend/ios/App/App.xcworkspace/
+frontend/ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
+frontend/ios/App/App.xcodeproj/xcuserdata/
+frontend/ios/capacitor-cordova-ios-plugins/
+**/xcuserdata/
+**/*.xcuserstate
+frontend/ios/DerivedData/
+
+# Capacitor / Android
+frontend/android/.gradle/
+frontend/android/build/
+frontend/android/app/build/
+frontend/android/app/release/
+frontend/android/capacitor-cordova-android-plugins/
+frontend/android/local.properties
+frontend/android/.idea/
+frontend/android/app/src/main/assets/public/
+frontend/android/app/src/main/assets/capacitor.config.json
+frontend/android/app/src/main/assets/capacitor.plugins.json
+frontend/android/app/src/main/res/raw/config.xml

@@ -14,7 +14,10 @@ export default function App() {
       if (t) {
         try {
           const r = await api.inverters();
-          setSession({ username: "you", inverter_count: r.inverters.length });
+          setSession({
+            username: r.username || "—",
+            inverter_count: r.inverters.length,
+          });
           setBootChecked(true);
           return;
         } catch {

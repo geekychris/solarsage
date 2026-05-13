@@ -15,10 +15,35 @@
 
 * { box-sizing: border-box; }
 
-body {
+html, body {
   margin: 0;
+  /* Strict clamp: page is never wider than the viewport. Combined with
+     overflow-x: hidden this guarantees only vertical scrolling on phones,
+     even if a child element tries to be too wide. */
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+body {
   background: var(--bg);
   color: var(--text);
+}
+
+/* Grid/flex children need `min-width: 0` so they can shrink below their
+   natural content width when the viewport is narrower than that content
+   (typical on phones with the History tab's Range chart, which has 8
+   channel checkboxes that would otherwise keep the panel wider than the
+   screen and force horizontal overflow). */
+.main, .tab-section, .panel {
+  min-width: 0;
+}
+
+/* Recharts' ResponsiveContainer measures its parent's clientWidth. In a
+   shrinkable flex/grid chain (panel inside tab-section inside grid), the
+   parent's content-box width is what ResponsiveContainer sees — but only
+   if the immediate wrapper has a definite width. Force it. */
+.chart-wrap {
+  width: 100%;
+  min-width: 0;
 }
 
 a { color: var(--accent-2); }
@@ -152,6 +177,10 @@ select, input {
   gap: 16px;
   padding: 16px;
   flex: 1;
+  /* Pack rows at the top — otherwise the implicit rows stretch to fill the
+     vertical space `flex: 1` gives us, leaving a huge gap between sidebar
+     and main on narrow screens where they stack vertically. */
+  align-content: start;
 }
 
 @media (max-width: 900px) {
@@ -205,7 +234,9 @@ select, input {
 
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  /* 140px min fits 2 columns on a phone (~340px usable inside .panel) and
+     expands to 3+ on tablets / desktop. */
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 12px;
 }
 
@@ -283,13 +314,20 @@ select, input {
   gap: 6px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 12px;
+  /* On narrow screens scroll horizontally rather than overflowing the page */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.tabs::-webkit-scrollbar { display: none; }
 .tab {
   padding: 8px 14px;
   cursor: pointer;
   font-size: 13px;
   color: var(--muted);
   border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .tab.active {
   color: var(--text);
@@ -314,7 +352,7 @@ select, input {
 
 .forecast-tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 10px;
   margin-top: 10px;
 }
@@ -387,7 +425,8 @@ select, input {
 .sync-msg {
   font-size: 12px;
   margin-left: 6px;
-  max-width: 360px;
+  /* On narrow screens cap the message so it doesn't push siblings off-screen */
+  max-width: min(360px, 90vw);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

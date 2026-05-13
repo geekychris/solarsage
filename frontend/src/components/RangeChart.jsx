@@ -68,6 +68,7 @@ export default function RangeChart({ serial, tzOffsetMinutes }) {
   const [err, setErr] = useState("");
   const [hidden, setHidden] = useState(DEFAULT_HIDDEN);
   // Drag-to-zoom state
+  const [crosshair, setCrosshair] = useState(null);
   const [dragStart, setDragStart] = useState(null);
   const [dragEnd, setDragEnd] = useState(null);
   // For "Reset zoom"
@@ -156,6 +157,21 @@ export default function RangeChart({ serial, tzOffsetMinutes }) {
     if (dragStart != null && e?.activeLabel != null) {
       setDragEnd(e.activeLabel);
     }
+    if (e?.activePayload?.length) {
+      setCrosshair(
+        e.activePayload
+          .filter((p) => p.value != null && Number.isFinite(p.value))
+          .map((p) => ({ dataKey: p.dataKey, value: p.value, color: p.color || p.stroke }))
+      );
+    } else {
+      setCrosshair(null);
+    }
+  }
+
+  function onMouseLeave() {
+    setDragStart(null);
+    setDragEnd(null);
+    setCrosshair(null);
   }
   function onMouseUp() {
     if (dragStart != null && dragEnd != null && dragStart !== dragEnd) {
@@ -228,7 +244,7 @@ export default function RangeChart({ serial, tzOffsetMinutes }) {
       {rows.length === 0 && !busy ? (
         <div className="empty">No data in this range. Pick a wider window or click <strong>Sync</strong> in the top bar.</div>
       ) : (
-        <div style={{ width: "100%", height: 420, marginTop: 12, userSelect: "none" }}>
+        <div className="chart-wrap" style={{ height: 420, marginTop: 12, userSelect: "none" }}>
           <ResponsiveContainer>
             <LineChart
               data={rows}
@@ -236,6 +252,7 @@ export default function RangeChart({ serial, tzOffsetMinutes }) {
               onMouseDown={onMouseDown}
               onMouseMove={onMouseMove}
               onMouseUp={onMouseUp}
+              onMouseLeave={onMouseLeave}
             >
               <CartesianGrid stroke="#232a35" strokeDasharray="3 3" />
               <XAxis
@@ -286,6 +303,20 @@ export default function RangeChart({ serial, tzOffsetMinutes }) {
                   connectNulls
                 />
               ))}
+              {(crosshair || []).map((p) => {
+                const channel = CHANNELS.find((c) => c.key === p.dataKey);
+                return (
+                  <ReferenceLine
+                    key={`xh-${p.dataKey}`}
+                    y={p.value}
+                    yAxisId={channel?.axis || "left"}
+                    stroke={p.color}
+                    strokeDasharray="2 3"
+                    strokeOpacity={0.55}
+                    ifOverflow="extendDomain"
+                  />
+                );
+              })}
               {dragStart != null && dragEnd != null && (
                 <ReferenceArea
                   yAxisId="left"

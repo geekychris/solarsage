@@ -9,12 +9,20 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor-community/sqlite": "^8.1.0",
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/ios": "^8.3.4",
+    "@capacitor/preferences": "^8.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.13.3"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.3.4",
     "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^6.0.3",
     "vite": "^5.4.11"
   }
 }

@@ -11,7 +11,6 @@ import RangeChart from "./RangeChart.jsx";
 import ExcessChart from "./ExcessChart.jsx";
 import WeatherPanel from "./WeatherPanel.jsx";
 import SyncButton from "./SyncButton.jsx";
-import SitesPanel from "./SitesPanel.jsx";
 import AppliancesPanel from "./AppliancesPanel.jsx";
 import SchedulerPanel from "./SchedulerPanel.jsx";
 import Heatmap from "./Heatmap.jsx";
@@ -29,7 +28,8 @@ export default function Dashboard({ session, onLoggedOut }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsBump, setSettingsBump] = useState(0);
   const [tzOffsetMinutes, setTzOffsetMinutes] = useState(null);
-  const [siteId, setSiteId] = useState(null);
+  // Single-site for now — multi-site UI removed pending real implementation
+  const siteId = "site-1";
   const [activeTab, setActiveTab] = useState("now");
 
   useEffect(() => {
@@ -130,8 +130,7 @@ export default function Dashboard({ session, onLoggedOut }) {
       </div>
       <div className="dashboard">
         <div className="sidebar">
-          <SitesPanel selected={siteId} onSelect={setSiteId} refreshKey={settingsBump} />
-          <h3 style={{ marginTop: 16 }}>Inverters</h3>
+          <h3>Inverters</h3>
           {inverters.length === 0 && <div className="muted">none</div>}
           {inverters.map((inv) => (
             <div

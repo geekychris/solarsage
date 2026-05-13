@@ -5,6 +5,7 @@ import {
   ComposedChart,
   Legend,
   Line,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -12,6 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "../api.js";
+import { useChartZoom } from "./useChartZoom.js";
 
 function fmtMinute(m) {
   const h = Math.floor(m / 60).toString().padStart(2, "0");
@@ -27,6 +29,7 @@ function fmtW(n) {
 export default function ExcessChart({ serial }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
+  const zoom = useChartZoom({ minSpan: 15 });
 
   async function load() {
     try {
@@ -130,15 +133,26 @@ export default function ExcessChart({ serial }) {
         </div>
       </div>
 
-      <div style={{ width: "100%", height: 360, marginTop: 14 }}>
+      {zoom.isZoomed && (
+        <button onClick={zoom.reset} style={{ marginTop: 6 }}>Reset zoom</button>
+      )}
+      <div className="chart-wrap" style={{ height: 360, marginTop: 14, userSelect: "none" }}>
         <ResponsiveContainer>
-          <ComposedChart data={rows} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+          <ComposedChart
+            data={rows}
+            margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
+            {...zoom.chartProps}
+          >
             <CartesianGrid stroke="#232a35" strokeDasharray="3 3" />
             <XAxis
-              dataKey="label"
+              dataKey="minute"
+              type="number"
+              domain={zoom.domain}
+              allowDataOverflow
               stroke="#8b97a8"
               tick={{ fill: "#8b97a8", fontSize: 11 }}
-              interval={Math.max(1, Math.floor(rows.length / 12))}
+              tickFormatter={fmtMinute}
+              minTickGap={40}
             />
             <YAxis
               stroke="#8b97a8"
@@ -148,9 +162,23 @@ export default function ExcessChart({ serial }) {
             <Tooltip
               contentStyle={{ background: "#151a22", border: "1px solid #232a35" }}
               labelStyle={{ color: "#8b97a8" }}
+              labelFormatter={fmtMinute}
             />
             <Legend wrapperStyle={{ color: "#8b97a8", fontSize: 12 }} />
-            <ReferenceLine x={fmtMinute(data.now_bucket)} stroke="#58a6ff" strokeDasharray="3 3" label={{ value: "now", fill: "#58a6ff", fontSize: 11, position: "top" }} />
+            <ReferenceLine x={data.now_bucket} stroke="#58a6ff" strokeDasharray="3 3" label={{ value: "now", fill: "#58a6ff", fontSize: 11, position: "top" }} />
+            {zoom.refArea && (
+              <ReferenceArea x1={zoom.refArea.x1} x2={zoom.refArea.x2} fill="#58a6ff" fillOpacity={0.15} />
+            )}
+            {zoom.crosshairs.map((p) => (
+              <ReferenceLine
+                key={`xh-${p.dataKey}`}
+                y={p.value}
+                stroke={p.color}
+                strokeDasharray="2 3"
+                strokeOpacity={0.55}
+                ifOverflow="extendDomain"
+              />
+            ))}
             {/* Clearsky theoretical envelope — thin orange dashed */}
             <Line
               type="monotone"

@@ -3,12 +3,15 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceArea,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { api } from "../api.js";
+import { useChartZoom } from "./useChartZoom.js";
 
 const RANGES = [
   { label: "15m", minutes: 15 },
@@ -33,6 +36,7 @@ export default function HistoryChart({ serial }) {
   const [points, setPoints] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const zoom = useChartZoom({ minSpan: 1000 });
 
   useEffect(() => {
     let cancelled = false;
@@ -135,33 +139,61 @@ export default function HistoryChart({ serial }) {
       ) : data.length === 0 ? (
         <div className="empty">No samples for the selected range.</div>
       ) : (
-        <div style={{ width: "100%", height: 320 }}>
-          <ResponsiveContainer>
-            <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke="#232a35" strokeDasharray="3 3" />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: "#8b97a8", fontSize: 11 }}
-                stroke="#8b97a8"
-                minTickGap={40}
-              />
-              <YAxis tick={{ fill: "#8b97a8", fontSize: 11 }} stroke="#8b97a8" />
-              <Tooltip
-                contentStyle={{ background: "#151a22", border: "1px solid #232a35" }}
-                labelStyle={{ color: "#8b97a8" }}
-              />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke="#58a6ff"
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-                name={field}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        <>
+          {zoom.isZoomed && (
+            <button onClick={zoom.reset} style={{ marginTop: 6 }}>Reset zoom</button>
+          )}
+          <div className="chart-wrap" style={{ height: 320, userSelect: "none" }}>
+            <ResponsiveContainer>
+              <LineChart
+                data={data}
+                margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
+                {...zoom.chartProps}
+              >
+                <CartesianGrid stroke="#232a35" strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="ts"
+                  type="number"
+                  domain={zoom.domain}
+                  allowDataOverflow
+                  scale="time"
+                  tick={{ fill: "#8b97a8", fontSize: 11 }}
+                  stroke="#8b97a8"
+                  tickFormatter={(t) => formatTs(t, rangeMin)}
+                  minTickGap={40}
+                />
+                <YAxis tick={{ fill: "#8b97a8", fontSize: 11 }} stroke="#8b97a8" />
+                <Tooltip
+                  contentStyle={{ background: "#151a22", border: "1px solid #232a35" }}
+                  labelStyle={{ color: "#8b97a8" }}
+                  labelFormatter={(t) => formatTs(t, rangeMin)}
+                />
+                {zoom.refArea && (
+                  <ReferenceArea x1={zoom.refArea.x1} x2={zoom.refArea.x2} fill="#58a6ff" fillOpacity={0.15} />
+                )}
+                {zoom.crosshairs.map((p) => (
+                  <ReferenceLine
+                    key={`xh-${p.dataKey}`}
+                    y={p.value}
+                    stroke={p.color}
+                    strokeDasharray="2 3"
+                    strokeOpacity={0.55}
+                    ifOverflow="extendDomain"
+                  />
+                ))}
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke="#58a6ff"
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                  name={field}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </>
       )}
     </div>
   );

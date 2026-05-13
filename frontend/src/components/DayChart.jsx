@@ -4,6 +4,7 @@ import {
   Legend,
   Line,
   LineChart,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -11,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "../api.js";
+import { useChartZoom } from "./useChartZoom.js";
 
 const SERIES_STYLE = {
   ppv: { name: "Solar PV (W)", color: "#2ea043", width: 3 },
@@ -47,6 +49,7 @@ export default function DayChart({ serial, todayLocal }) {
   const [err, setErr] = useState("");
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState("");
+  const zoom = useChartZoom({ minSpan: 60_000 });
 
   async function loadCoverage() {
     try {
@@ -167,14 +170,27 @@ export default function DayChart({ serial, todayLocal }) {
       ) : null}
 
       {rows.length > 0 && (
-        <div style={{ width: "100%", height: 360, marginTop: 12 }}>
+        <>
+          {zoom.isZoomed && (
+            <button onClick={zoom.reset} style={{ marginTop: 6 }}>Reset zoom</button>
+          )}
+          <div className="chart-wrap" style={{ height: 360, marginTop: 12, userSelect: "none" }}>
           <ResponsiveContainer>
-            <LineChart data={rows} margin={{ top: 10, right: 50, left: 0, bottom: 0 }}>
+            <LineChart
+              data={rows}
+              margin={{ top: 10, right: 50, left: 0, bottom: 0 }}
+              {...zoom.chartProps}
+            >
               <CartesianGrid stroke="#232a35" strokeDasharray="3 3" />
               <XAxis
-                dataKey="label"
+                dataKey="ts"
+                type="number"
+                domain={zoom.domain}
+                allowDataOverflow
+                scale="time"
                 stroke="#8b97a8"
                 tick={{ fill: "#8b97a8", fontSize: 11 }}
+                tickFormatter={(t) => fmtTime(t, data?.tz_offset_minutes ?? 0)}
                 minTickGap={40}
               />
               <YAxis
@@ -194,9 +210,24 @@ export default function DayChart({ serial, todayLocal }) {
               <Tooltip
                 contentStyle={{ background: "#151a22", border: "1px solid #232a35" }}
                 labelStyle={{ color: "#8b97a8" }}
+                labelFormatter={(t) => fmtTime(t, data?.tz_offset_minutes ?? 0)}
               />
               <Legend wrapperStyle={{ color: "#8b97a8", fontSize: 12 }} />
               <ReferenceLine y={0} yAxisId="left" stroke="#444" />
+              {zoom.refArea && (
+                <ReferenceArea yAxisId="left" x1={zoom.refArea.x1} x2={zoom.refArea.x2} fill="#58a6ff" fillOpacity={0.15} />
+              )}
+              {zoom.crosshairs.map((p) => (
+                <ReferenceLine
+                  key={`xh-${p.dataKey}`}
+                  y={p.value}
+                  yAxisId={SERIES_STYLE[p.dataKey]?.yAxis === "right" ? "right" : "left"}
+                  stroke={p.color}
+                  strokeDasharray="2 3"
+                  strokeOpacity={0.55}
+                  ifOverflow="extendDomain"
+                />
+              ))}
               {availableFields.map((f) => {
                 const cfg = SERIES_STYLE[f] || { name: f, color: "#999", width: 1 };
                 return (
@@ -216,7 +247,8 @@ export default function DayChart({ serial, todayLocal }) {
               })}
             </LineChart>
           </ResponsiveContainer>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

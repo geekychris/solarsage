@@ -5,6 +5,7 @@ import {
   ComposedChart,
   Legend,
   Line,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -12,6 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "../api.js";
+import { useChartZoom } from "./useChartZoom.js";
 
 function fmtTemp(f) {
   if (f == null) return "—";
@@ -31,6 +33,7 @@ export default function WeatherPanel({ serial }) {
   const [w, setW] = useState(null);
   const [forecast, setForecast] = useState(null);
   const [err, setErr] = useState("");
+  const zoom = useChartZoom({ minSpan: 60_000 });
 
   async function load() {
     try {
@@ -65,6 +68,7 @@ export default function WeatherPanel({ serial }) {
 
   // Hourly chart rows for next 48h
   const rows = hourly.slice(0, 48).map((r) => ({
+    ts: new Date(r.time).getTime(),
     label: shortTime(r.time),
     Temperature: r.temperature_f != null ? Math.round(r.temperature_f) : null,
     Cloud: r.cloud_pct != null ? Math.round(r.cloud_pct) : null,
@@ -168,15 +172,27 @@ export default function WeatherPanel({ serial }) {
       <h4 style={{ margin: "16px 0 6px", fontSize: 13, color: "var(--muted)" }}>
         Next 48 hours
       </h4>
-      <div style={{ width: "100%", height: 320 }}>
+      {zoom.isZoomed && (
+        <button onClick={zoom.reset} style={{ marginTop: 6 }}>Reset zoom</button>
+      )}
+      <div className="chart-wrap" style={{ height: 320, userSelect: "none" }}>
         <ResponsiveContainer>
-          <ComposedChart data={rows} margin={{ top: 10, right: 50, left: 0, bottom: 0 }}>
+          <ComposedChart
+            data={rows}
+            margin={{ top: 10, right: 50, left: 0, bottom: 0 }}
+            {...zoom.chartProps}
+          >
             <CartesianGrid stroke="#232a35" strokeDasharray="3 3" />
             <XAxis
-              dataKey="label"
+              dataKey="ts"
+              type="number"
+              domain={zoom.domain}
+              allowDataOverflow
+              scale="time"
               stroke="#8b97a8"
               tick={{ fill: "#8b97a8", fontSize: 11 }}
-              interval={Math.max(1, Math.floor(rows.length / 12))}
+              tickFormatter={(t) => shortTime(new Date(t).toISOString())}
+              minTickGap={40}
             />
             <YAxis
               yAxisId="left"
@@ -195,9 +211,24 @@ export default function WeatherPanel({ serial }) {
             <Tooltip
               contentStyle={{ background: "#151a22", border: "1px solid #232a35" }}
               labelStyle={{ color: "#8b97a8" }}
+              labelFormatter={(t) => shortTime(new Date(t).toISOString())}
             />
             <Legend wrapperStyle={{ color: "#8b97a8", fontSize: 12 }} />
             <ReferenceLine y={0} yAxisId="left" stroke="#444" />
+            {zoom.refArea && (
+              <ReferenceArea yAxisId="left" x1={zoom.refArea.x1} x2={zoom.refArea.x2} fill="#58a6ff" fillOpacity={0.15} />
+            )}
+            {zoom.crosshairs.map((p) => (
+              <ReferenceLine
+                key={`xh-${p.dataKey}`}
+                y={p.value}
+                yAxisId={p.dataKey === "Temperature" ? "right" : "left"}
+                stroke={p.color}
+                strokeDasharray="2 3"
+                strokeOpacity={0.55}
+                ifOverflow="extendDomain"
+              />
+            ))}
             <Area
               yAxisId="left"
               type="monotone"

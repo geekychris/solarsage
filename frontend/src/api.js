@@ -9,7 +9,44 @@ export function setToken(t) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+// Capacitor detection — same React bundle ships to the web (FastAPI backend)
+// and to iOS/Android (in-app handlers). Inside Capacitor the app is served from
+// capacitor://localhost (iOS) or http://localhost (Android), so we route /api/*
+// calls to local handlers instead of HTTP.
+const IS_NATIVE = (() => {
+  if (typeof window === "undefined") return false;
+  const cap = window.Capacitor;
+  return !!(cap && cap.isNativePlatform && cap.isNativePlatform());
+})();
+
+let localHandlersPromise = null;
+async function getLocalHandlers() {
+  if (!localHandlersPromise) {
+    // Dynamic import keeps the local stack out of the web bundle.
+    localHandlersPromise = import("./local/server.js").then((m) => m.handlers);
+  }
+  return localHandlersPromise;
+}
+
+async function dispatchLocal(path, opts) {
+  const handlers = await getLocalHandlers();
+  const url = new URL(path, "http://local");
+  const route = `${opts.method || "GET"} ${url.pathname}`;
+  const handler = handlers[route];
+  if (!handler) {
+    const err = new Error(`No local handler for ${route}`);
+    err.status = 404;
+    throw err;
+  }
+  return await handler({
+    query: Object.fromEntries(url.searchParams),
+    body: opts.body,
+  });
+}
+
 async function request(path, { method = "GET", body, auth = true } = {}) {
+  if (IS_NATIVE) return dispatchLocal(path, { method, body });
+
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (auth) {
