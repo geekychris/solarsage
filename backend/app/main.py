@@ -57,6 +57,13 @@ from .widgets.solar_excess import SolarExcessWidget
 from .widgets.solar_precool import PrecoolWidget
 from .widgets.community_newsletter import NewsletterWidget
 from .widgets.weather import WeatherWidget
+from .widgets.safety_aqi import AqiWidget
+from .widgets.quicklinks import QuickLinksWidget
+from .widgets.property_mode import PropertyModeWidget
+from .widgets.news import NewsWidget
+from .widgets.reservations import ReservationsWidget
+from .widgets.outdoor_fishing import FishingWindowWidget
+from .widgets.trip_planner import TripPlannerWidget
 from .events import EventStore, run_reminder_scheduler
 from .events.store import Event as EventRow, Reminder as ReminderRow, event_to_dict
 from .events.scheduler import _ingest_once as events_ingest_once
@@ -93,19 +100,26 @@ def _register_builtin_widgets() -> None:
         QuakesWidget(),
         StormsWidget(),
         UvHeatWidget(),
+        AqiWidget(),
         # Outdoor
         WeatherWidget(),
         MarineWidget(),
         SunMoonWidget(),
+        FishingWindowWidget(),
         # Travel
+        TripPlannerWidget(),
         CurrencyWidget(),
         DriveTimeWidget(),
         HolidaysWidget(),
         # Solar synergy
+        PropertyModeWidget(),
         SolarExcessWidget(),
         PrecoolWidget(),
         # Community
         NewsletterWidget(),
+        NewsWidget(),
+        ReservationsWidget(),
+        QuickLinksWidget(),
     ):
         if widget_registry.get(widget.id) is None:
             widget_registry.register(widget)

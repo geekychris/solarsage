@@ -1009,6 +1009,135 @@ select, input {
   color: #6cd1ff;
 }
 
+/* AQI */
+.aqi { display: flex; flex-direction: column; gap: 6px; }
+.aqi-now {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border, #2a2f37);
+}
+.aqi-big { font-size: 32px; font-weight: 800; line-height: 1; }
+.aqi-good  { color: #6fdc8c; }
+.aqi-mod   { color: #ffd166; }
+.aqi-usg   { color: #ff9b6c; }
+.aqi-bad   { color: #ef6f6c; }
+.aqi-vbad  { color: #c54a8c; }
+.aqi-haz   { color: #6a0d2a; }
+.aqi-row { display: grid; grid-template-columns: 100px auto 1fr; gap: 8px; font-size: 13px; }
+
+/* Quick links */
+.quicklinks { display: flex; flex-direction: column; gap: 8px; }
+.ql-group { display: flex; flex-direction: column; gap: 2px; }
+.ql-link { color: #6cd1ff; font-size: 13px; }
+
+/* Fishing window */
+.fishing { display: flex; flex-direction: column; gap: 6px; }
+.fishing-row {
+  display: grid;
+  grid-template-columns: 60px 32px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.02);
+  font-size: 13px;
+}
+.fish-score { font-weight: 700; }
+.fish-great { border-left: 3px solid #6fdc8c; }
+.fish-good  { border-left: 3px solid #ffd166; }
+.fish-ok    { border-left: 3px solid #888; }
+.fish-poor  { border-left: 3px solid #555; opacity: 0.6; }
+.fishing-hourly {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 1px;
+  margin-top: 6px;
+  align-items: end;
+  height: 60px;
+}
+.fishing-spark {
+  background: #6cd1ff;
+  min-height: 4px;
+  border-radius: 1px;
+}
+.fishing-spark.fish-great { background: #6fdc8c; }
+.fishing-spark.fish-good  { background: #ffd166; }
+.fishing-spark.fish-ok    { background: #888; }
+.fishing-spark.fish-poor  { background: #444; }
+
+/* Reservations */
+.reservations { display: flex; flex-direction: column; gap: 6px; }
+.reservation-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 10px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.03);
+}
+.reservation-when { text-align: right; }
+.reservation-main { font-size: 13px; }
+
+/* News */
+.news { display: flex; flex-direction: column; gap: 10px; }
+.news-feed { display: flex; flex-direction: column; gap: 4px; }
+.news-item {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.news-item:hover {
+  background: rgba(255,255,255,0.05);
+}
+.news-title { color: #6cd1ff; font-size: 13px; }
+
+/* Property mode */
+.property-mode {
+  padding: 10px;
+  border-radius: 6px;
+  border-left: 4px solid #6cd1ff;
+  background: rgba(255,255,255,0.03);
+}
+.property-mode-big { font-size: 18px; font-weight: 700; }
+.mode-occupied { border-left-color: #6fdc8c; }
+.mode-vacant   { border-left-color: #888; }
+.mode-arriving { border-left-color: #ffd166; }
+
+/* Trip planner */
+.trip { display: flex; flex-direction: column; gap: 10px; }
+.trip-now {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border, #2a2f37);
+}
+.trip-now-stats { text-align: right; font-size: 13px; }
+.trip-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.trip-day {
+  text-align: center;
+  padding: 6px 2px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 3px solid transparent;
+}
+.trip-score { font-size: 18px; font-weight: 700; margin: 4px 0; }
+.trip-great { border-bottom-color: #6fdc8c; }
+.trip-good  { border-bottom-color: #ffd166; }
+.trip-ok    { border-bottom-color: #888; }
+.trip-bad   { border-bottom-color: #ef6f6c; opacity: 0.7; }
+
 /* Print / Save-as-PDF: light theme, full-width, no clipped charts. */
 @media print {
   @page {

@@ -16,6 +16,13 @@ import SolarExcessWidget from "./widgets/SolarExcessWidget.jsx";
 import PrecoolWidget from "./widgets/PrecoolWidget.jsx";
 import NewsletterWidget from "./widgets/NewsletterWidget.jsx";
 import WeatherWidget from "./widgets/WeatherWidget.jsx";
+import AqiWidget from "./widgets/AqiWidget.jsx";
+import QuickLinksWidget from "./widgets/QuickLinksWidget.jsx";
+import FishingWindowWidget from "./widgets/FishingWindowWidget.jsx";
+import ReservationsWidget from "./widgets/ReservationsWidget.jsx";
+import NewsWidget from "./widgets/NewsWidget.jsx";
+import PropertyModeWidget from "./widgets/PropertyModeWidget.jsx";
+import TripPlannerWidget from "./widgets/TripPlannerWidget.jsx";
 import WidgetSettings from "./WidgetSettings.jsx";
 
 const RENDERERS = {
@@ -34,6 +41,13 @@ const RENDERERS = {
   precool: PrecoolWidget,
   hoa_newsletter: NewsletterWidget,
   weather: WeatherWidget,
+  aqi: AqiWidget,
+  quicklinks: QuickLinksWidget,
+  fishing_window: FishingWindowWidget,
+  reservations: ReservationsWidget,
+  news: NewsWidget,
+  property_mode: PropertyModeWidget,
+  trip_planner: TripPlannerWidget,
 };
 
 // Stable order for subtabs when more than one is present.
