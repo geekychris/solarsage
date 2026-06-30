@@ -207,4 +207,18 @@ export const api = {
     request(
       `/api/battery_cycles?serial=${encodeURIComponent(serial)}&days=${days}`
     ),
+  // Widgets (Local tab)
+  listWidgets: () => request("/api/widgets"),
+  getWidget: (id) => request(`/api/widgets/${encodeURIComponent(id)}`),
+  getWidgetConfig: (id) =>
+    request(`/api/widgets/${encodeURIComponent(id)}/config`),
+  putWidgetConfig: (id, body) =>
+    request(`/api/widgets/${encodeURIComponent(id)}/config`, {
+      method: "PUT",
+      body,
+    }),
+  refreshWidget: (id) =>
+    request(`/api/widgets/${encodeURIComponent(id)}/refresh`, {
+      method: "POST",
+    }),
 };

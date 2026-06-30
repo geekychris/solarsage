@@ -40,6 +40,11 @@ from .poller import run_poller
 from .schemas import LoginRequest, LoginResponse
 from .session_store import Session, SessionStore
 from .storage import History
+from .widgets import WidgetStore, registry as widget_registry, run_widget_refreshers
+from .widgets.refresher import refresh_now as widget_refresh_now
+from .widgets.tide import TideWidget
+from .widgets.border import BorderWidget
+from .widgets.hoa import HoaWidget
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -55,6 +60,20 @@ AUTO_PASSWORD = os.getenv("EG4_PASSWORD") or None
 
 sessions = SessionStore()
 history = History(DB_PATH)
+widget_store = WidgetStore(DB_PATH)
+
+
+def _register_builtin_widgets() -> None:
+    """One place to wire up the shipped widgets. Adding a new widget = add
+    a class + register it here; nothing else in main.py needs to change."""
+    # Idempotent: register on app import, but skip dupes so reload-in-place
+    # during dev doesn't crash.
+    for widget in (TideWidget(), HoaWidget(), BorderWidget()):
+        if widget_registry.get(widget.id) is None:
+            widget_registry.register(widget)
+
+
+_register_builtin_widgets()
 
 
 def _resolve_auto_credentials() -> tuple[str, str] | None:
@@ -136,6 +155,7 @@ async def _bootstrap_default_site() -> None:
 async def lifespan(app: FastAPI):
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     await history.init()
+    await widget_store.init()
     await _bootstrap_default_site()
     log.info("history db ready at %s", DB_PATH)
     # Start the auto-login loop unconditionally — it idles if no creds are
@@ -144,7 +164,12 @@ async def lifespan(app: FastAPI):
     log.info("auto-login background task started")
     alerts_task = asyncio.create_task(run_alerts(history))
     log.info("alerts watcher started")
+    widgets_task = asyncio.create_task(
+        run_widget_refreshers(widget_registry, widget_store)
+    )
+    log.info("widget refreshers started (%d widgets)", len(list(widget_registry.all())))
     yield
+    widgets_task.cancel()
     alerts_task.cancel()
     if auto_task:
         auto_task.cancel()
@@ -1579,6 +1604,107 @@ async def battery_cycles(
         "soc_field": soc_field,
         "days": out_days,
     }
+
+
+# ---------------------------------------------------------------------------
+# Widgets — server-side registry of self-describing dashboard tiles.
+# Each widget has a stable id, metadata (description + JSON-schema-ish hints),
+# config, and a cached "knowledge store" view that the LLM can introspect
+# via REST or the matching MCP tools.
+# ---------------------------------------------------------------------------
+
+
+def _require_widget(widget_id: str):
+    w = widget_registry.get(widget_id)
+    if w is None:
+        raise HTTPException(status_code=404, detail=f"unknown widget: {widget_id}")
+    return w
+
+
+async def _widget_payload(w, *, include_data: bool = True) -> dict[str, Any]:
+    config = await widget_store.get_config(w.id) or dict(w.default_config)
+    state = await widget_store.get_state(w.id)
+    body: dict[str, Any] = {
+        "meta": w.meta(),
+        "config": config,
+        "fetched_at": state.fetched_at if state else None,
+        "error": state.error if state else None,
+    }
+    if include_data:
+        body["data"] = state.data if state else None
+    return body
+
+
+@app.get("/api/widgets")
+async def list_widgets(_: Session | None = Depends(require_read)):
+    """Index of every registered widget plus its current cached payload."""
+    out = []
+    for w in widget_registry.all():
+        out.append({"id": w.id, **(await _widget_payload(w))})
+    return {"widgets": out}
+
+
+@app.get("/api/widgets/{widget_id}")
+async def get_widget(widget_id: str, _: Session | None = Depends(require_read)):
+    w = _require_widget(widget_id)
+    return {"id": w.id, **(await _widget_payload(w))}
+
+
+@app.get("/api/widgets/{widget_id}/meta")
+async def get_widget_meta(widget_id: str, _: Session | None = Depends(require_read)):
+    """Static metadata — schema, description, refresh policy. The
+    "knowledge" half of the knowledge store."""
+    w = _require_widget(widget_id)
+    return {"id": w.id, "meta": w.meta()}
+
+
+@app.get("/api/widgets/{widget_id}/data")
+async def get_widget_data(widget_id: str, _: Session | None = Depends(require_read)):
+    w = _require_widget(widget_id)
+    state = await widget_store.get_state(w.id)
+    return {
+        "id": w.id,
+        "fetched_at": state.fetched_at if state else None,
+        "error": state.error if state else None,
+        "data": state.data if state else None,
+    }
+
+
+@app.get("/api/widgets/{widget_id}/config")
+async def get_widget_config(widget_id: str, _: Session | None = Depends(require_read)):
+    w = _require_widget(widget_id)
+    config = await widget_store.get_config(w.id) or dict(w.default_config)
+    return {"id": w.id, "config": config, "default_config": w.default_config}
+
+
+@app.put("/api/widgets/{widget_id}/config")
+async def put_widget_config(
+    widget_id: str,
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    w = _require_widget(widget_id)
+    await widget_store.put_config(w.id, body)
+    # New config — pull fresh data immediately so the UI reflects the change
+    # without waiting for the next refresh tick.
+    await widget_refresh_now(w, widget_store)
+    state = await widget_store.get_state(w.id)
+    return {
+        "id": w.id,
+        "config": body,
+        "fetched_at": state.fetched_at if state else None,
+        "error": state.error if state else None,
+    }
+
+
+@app.post("/api/widgets/{widget_id}/refresh")
+async def post_widget_refresh(
+    widget_id: str,
+    _: Session | None = Depends(require_read),
+):
+    w = _require_widget(widget_id)
+    await widget_refresh_now(w, widget_store)
+    return {"id": w.id, **(await _widget_payload(w))}
 
 
 @app.get("/api/health")

@@ -158,5 +158,44 @@ async def list_alerts(site_id: str = "site-1", unack_only: bool = False) -> dict
     )
 
 
+# ---------------------------------------------------------------------------
+# Widget introspection — the "knowledge store" surface. Every registered
+# dashboard widget can be discovered, its metadata read, and its cached data
+# queried, all through these three tools. Adding a new widget on the
+# backend automatically makes it available to LLMs via these tools.
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def list_widgets() -> dict:
+    """List every dashboard widget with its current data + metadata.
+
+    Use this first to discover what data is available — tide tables, border
+    wait times, HOA activities, etc. Each entry includes the widget's id,
+    description, last-fetched timestamp, and current cached payload.
+    """
+    return await _get("/api/widgets")
+
+
+@mcp.tool()
+async def widget_meta(widget_id: str) -> dict:
+    """Static metadata for one widget — description, refresh cadence, and
+    JSON-schema-ish hints describing the shape of its ``data`` and
+    ``config`` blobs. Use this to discover the field names you can rely on
+    before parsing ``widget_data``.
+    """
+    return await _get(f"/api/widgets/{widget_id}/meta")
+
+
+@mcp.tool()
+async def widget_data(widget_id: str) -> dict:
+    """Current cached data for one widget. Returns ``{fetched_at, error,
+    data}``. ``data`` is the widget's domain payload — for ``tides`` it's a
+    list of stations and their high/low extremes; for ``border`` it's CBP
+    wait times; for ``hoa`` it's calendar PDF links + announcements.
+    """
+    return await _get(f"/api/widgets/{widget_id}/data")
+
+
 if __name__ == "__main__":
     mcp.run()

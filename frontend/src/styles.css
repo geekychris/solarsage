@@ -501,6 +501,49 @@ select, input {
 .alert-text { margin-top: 2px; font-size: 13px; }
 .alert-rule { font-size: 11px; margin-top: 2px; }
 
+/* Local tab — widgets (tides / border / HOA) */
+.local-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 16px;
+}
+.widget-card {
+  display: flex;
+  flex-direction: column;
+}
+.widget-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.widget-head-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.widget-body { flex: 1; }
+.error-inline { color: #f08080; font-size: 12px; }
+
+.tide-stations { display: flex; flex-direction: column; gap: 12px; }
+.tide-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+.tide-table th,
+.tide-table td { padding: 3px 8px; border-bottom: 1px solid var(--border, #2a2f37); }
+.tide-high { color: #6cd1ff; font-weight: 600; }
+.tide-low  { color: #ffae6c; font-weight: 600; }
+
+.border-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+.border-table th,
+.border-table td { padding: 4px 8px; border-bottom: 1px solid var(--border, #2a2f37); vertical-align: top; }
+.border-fast   { color: #6fdc8c; font-weight: 600; }
+.border-medium { color: #ffd166; font-weight: 600; }
+.border-slow   { color: #ef6f6c; font-weight: 600; }
+.border-closed { color: #888; font-style: italic; }
+
+.hoa-pdf { color: var(--accent, #6cd1ff); }
+
 /* Print / Save-as-PDF: light theme, full-width, no clipped charts. */
 @media print {
   @page {
