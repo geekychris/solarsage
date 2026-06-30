@@ -9,7 +9,7 @@ has a one-click path to the full schedule.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from urllib.parse import urljoin
 
@@ -62,31 +62,60 @@ MONTH_RE = re.compile(
 )
 
 
-def _classify_calendar_links(links: list[dict[str, str]]) -> dict[str, Any]:
+YEAR_RE = re.compile(r"\b(20\d{2})\b")
+
+
+def _label_year(label: str) -> int | None:
+    m = YEAR_RE.search(label)
+    return int(m.group(1)) if m else None
+
+
+def _classify_calendar_links(
+    links: list[dict[str, str]], today: date | None = None,
+) -> dict[str, Any]:
     """Best-effort: find 'monthly' and 'weekly' calendar PDFs by label.
 
     The HOA labels weekly calendars as "June 29 - July 5, 2026" and monthly
     ones as bare "June 2026" — neither contains the words "weekly"/"monthly".
-    Heuristic: a label with TWO date ranges or a "DD - " span is weekly; a
-    label that is just "<MonthName> <YYYY>" is monthly.
+    The page also lists historical calendars going back years, so we must
+    prefer current-year labels over older ones.
     """
-    monthly = None
-    weekly = None
+    today = today or datetime.now(timezone.utc).date()
+    year = today.year
+
+    monthly_candidates: list[dict[str, str]] = []
+    weekly_candidates: list[dict[str, str]] = []
     for link in links:
         lab = link["label"].strip()
         low = lab.lower()
         looks_weekly = (
             "week" in low
-            or re.search(r"\b\d{1,2}\s*[-–]\s*\d{1,2}\b", lab)  # "29 - 5"
-            or re.search(r"-\s*[A-Za-z]+\s+\d{1,2}", lab)            # "- July 5"
+            or re.search(r"\b\d{1,2}\s*[-–]\s*\d{1,2}\b", lab)
+            or re.search(r"-\s*[A-Za-z]+\s+\d{1,2}", lab)
         )
         looks_monthly = bool(MONTH_RE.fullmatch(lab) or MONTH_RE.match(lab))
-        if weekly is None and looks_weekly:
-            weekly = link
+        if looks_weekly:
+            weekly_candidates.append(link)
             continue
-        if monthly is None and looks_monthly and not looks_weekly:
-            monthly = link
-    return {"monthly_pdf": monthly, "weekly_pdf": weekly}
+        if looks_monthly:
+            monthly_candidates.append(link)
+
+    def _pick(candidates: list[dict[str, str]]) -> dict[str, str] | None:
+        if not candidates:
+            return None
+        # Current year wins; otherwise undated; otherwise the most recent year.
+        current = [c for c in candidates if _label_year(c["label"]) == year]
+        if current:
+            return current[0]
+        undated = [c for c in candidates if _label_year(c["label"]) is None]
+        if undated:
+            return undated[0]
+        return max(candidates, key=lambda c: _label_year(c["label"]) or 0)
+
+    return {
+        "monthly_pdf": _pick(monthly_candidates),
+        "weekly_pdf": _pick(weekly_candidates),
+    }
 
 
 def _extract_announcements(html: str) -> list[str]:
