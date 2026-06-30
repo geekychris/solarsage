@@ -221,4 +221,30 @@ export const api = {
     request(`/api/widgets/${encodeURIComponent(id)}/refresh`, {
       method: "POST",
     }),
+  // Events / reminders
+  eventsToday: () => request("/api/events/today"),
+  listEvents: (params = {}) => {
+    const p = new URLSearchParams();
+    if (params.starts_after) p.set("starts_after", params.starts_after);
+    if (params.starts_before) p.set("starts_before", params.starts_before);
+    if (params.today_only) p.set("today_only", "true");
+    const q = p.toString();
+    return request(`/api/events${q ? `?${q}` : ""}`);
+  },
+  createEvent: (body) => request("/api/events", { method: "POST", body }),
+  updateEvent: (id, body) =>
+    request(`/api/events/${encodeURIComponent(id)}`, { method: "PUT", body }),
+  deleteEvent: (id) =>
+    request(`/api/events/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  setEventReminders: (id, reminders) =>
+    request(`/api/events/${encodeURIComponent(id)}/reminders`, {
+      method: "PUT",
+      body: { reminders },
+    }),
+  testSayEvent: (id) =>
+    request(`/api/events/${encodeURIComponent(id)}/say`, { method: "POST" }),
+  ingestHoa: () =>
+    request("/api/events/ingest_hoa", { method: "POST" }),
+  ttsSay: (text) =>
+    request("/api/tts/say", { method: "POST", body: { text } }),
 };

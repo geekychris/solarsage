@@ -45,6 +45,10 @@ from .widgets.refresher import refresh_now as widget_refresh_now
 from .widgets.tide import TideWidget
 from .widgets.border import BorderWidget
 from .widgets.hoa import HoaWidget
+from .events import EventStore, run_reminder_scheduler
+from .events.store import Event as EventRow, Reminder as ReminderRow, event_to_dict
+from .events.scheduler import _ingest_once as events_ingest_once
+from .events.tts import say as tts_say
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -61,6 +65,7 @@ AUTO_PASSWORD = os.getenv("EG4_PASSWORD") or None
 sessions = SessionStore()
 history = History(DB_PATH)
 widget_store = WidgetStore(DB_PATH)
+event_store = EventStore(DB_PATH)
 
 
 def _register_builtin_widgets() -> None:
@@ -156,6 +161,7 @@ async def lifespan(app: FastAPI):
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     await history.init()
     await widget_store.init()
+    await event_store.init()
     await _bootstrap_default_site()
     log.info("history db ready at %s", DB_PATH)
     # Start the auto-login loop unconditionally — it idles if no creds are
@@ -168,7 +174,12 @@ async def lifespan(app: FastAPI):
         run_widget_refreshers(widget_registry, widget_store)
     )
     log.info("widget refreshers started (%d widgets)", len(list(widget_registry.all())))
+    events_task = asyncio.create_task(
+        run_reminder_scheduler(event_store, widget_store)
+    )
+    log.info("event reminder scheduler started")
     yield
+    events_task.cancel()
     widgets_task.cancel()
     alerts_task.cancel()
     if auto_task:
@@ -178,7 +189,28 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="SolarSage",
-    description="Monitor · Predict · Optimize — EG4 solar telemetry, history, weather-aware forecasts.",
+    description=(
+        "Monitor · Predict · Optimize — EG4 solar telemetry, history, "
+        "weather-aware forecasts, plus introspectable dashboard widgets "
+        "(tides, border wait times, HOA activities) and a TTS-driven "
+        "reminder service.\n\n"
+        "Auth: send `X-API-Key: <key>` (configured via `EG4_API_KEY` "
+        "env var) for read-only endpoints, or `Authorization: Bearer "
+        "<token>` from `/api/login` for endpoints that need a live EG4 "
+        "session.\n\n"
+        "Home-automation integration: poll `/api/widgets` for all "
+        "knowledge-store payloads, `/api/events/today` for today's "
+        "schedule, and POST to `/api/tts/say` to speak arbitrary text."
+    ),
+    openapi_tags=[
+        {"name": "widgets", "description": "Self-describing dashboard "
+         "widgets (tides, border wait times, HOA activities). Each widget "
+         "publishes its own metadata + cached data."},
+        {"name": "events", "description": "Scheduled events + reminders. "
+         "Events come from the HOA weekly PDF (auto) or manual POSTs. "
+         "Reminders fire via the Pi's local TTS service."},
+        {"name": "tts", "description": "Local text-to-speech passthrough."},
+    ],
     lifespan=lifespan,
 )
 app.add_middleware(
@@ -1635,30 +1667,45 @@ async def _widget_payload(w, *, include_data: bool = True) -> dict[str, Any]:
     return body
 
 
-@app.get("/api/widgets")
+@app.get("/api/widgets", tags=["widgets"], summary="List all widgets")
 async def list_widgets(_: Session | None = Depends(require_read)):
-    """Index of every registered widget plus its current cached payload."""
+    """Index of every registered widget plus its current cached payload.
+
+    Each entry has: ``id``, ``meta`` (description, schemas, refresh policy),
+    ``config`` (effective), ``data`` (last cached payload), ``fetched_at``,
+    ``error``. Home-automation systems should poll this endpoint and read
+    each widget's ``data`` field directly.
+    """
     out = []
     for w in widget_registry.all():
         out.append({"id": w.id, **(await _widget_payload(w))})
     return {"widgets": out}
 
 
-@app.get("/api/widgets/{widget_id}")
+@app.get("/api/widgets/{widget_id}", tags=["widgets"], summary="Get one widget")
 async def get_widget(widget_id: str, _: Session | None = Depends(require_read)):
     w = _require_widget(widget_id)
     return {"id": w.id, **(await _widget_payload(w))}
 
 
-@app.get("/api/widgets/{widget_id}/meta")
+@app.get(
+    "/api/widgets/{widget_id}/meta",
+    tags=["widgets"],
+    summary="Widget metadata",
+)
 async def get_widget_meta(widget_id: str, _: Session | None = Depends(require_read)):
     """Static metadata — schema, description, refresh policy. The
-    "knowledge" half of the knowledge store."""
+    "knowledge" half of the knowledge store; LLMs should call this to
+    learn what fields to expect from ``/data``."""
     w = _require_widget(widget_id)
     return {"id": w.id, "meta": w.meta()}
 
 
-@app.get("/api/widgets/{widget_id}/data")
+@app.get(
+    "/api/widgets/{widget_id}/data",
+    tags=["widgets"],
+    summary="Widget data (cached)",
+)
 async def get_widget_data(widget_id: str, _: Session | None = Depends(require_read)):
     w = _require_widget(widget_id)
     state = await widget_store.get_state(w.id)
@@ -1670,14 +1717,22 @@ async def get_widget_data(widget_id: str, _: Session | None = Depends(require_re
     }
 
 
-@app.get("/api/widgets/{widget_id}/config")
+@app.get(
+    "/api/widgets/{widget_id}/config",
+    tags=["widgets"],
+    summary="Widget config",
+)
 async def get_widget_config(widget_id: str, _: Session | None = Depends(require_read)):
     w = _require_widget(widget_id)
     config = await widget_store.get_config(w.id) or dict(w.default_config)
     return {"id": w.id, "config": config, "default_config": w.default_config}
 
 
-@app.put("/api/widgets/{widget_id}/config")
+@app.put(
+    "/api/widgets/{widget_id}/config",
+    tags=["widgets"],
+    summary="Update widget config",
+)
 async def put_widget_config(
     widget_id: str,
     body: dict[str, Any],
@@ -1697,7 +1752,11 @@ async def put_widget_config(
     }
 
 
-@app.post("/api/widgets/{widget_id}/refresh")
+@app.post(
+    "/api/widgets/{widget_id}/refresh",
+    tags=["widgets"],
+    summary="Force refresh",
+)
 async def post_widget_refresh(
     widget_id: str,
     _: Session | None = Depends(require_read),
@@ -1705,6 +1764,204 @@ async def post_widget_refresh(
     w = _require_widget(widget_id)
     await widget_refresh_now(w, widget_store)
     return {"id": w.id, **(await _widget_payload(w))}
+
+
+# ---------------------------------------------------------------------------
+# Events + reminders.
+# Events come from two sources: ``hoa`` (auto-extracted from the El Dorado
+# Ranch weekly PDF) and ``manual`` (POSTed by the user). Each event carries
+# a list of reminders ({minutes_before, mode, custom_text}); the reminder
+# scheduler ticks every minute and fires reminders via the local TTS
+# service. Home-automation systems can read /api/events/today to render
+# today's agenda.
+# ---------------------------------------------------------------------------
+
+
+def _today_window_iso() -> tuple[str, str]:
+    """Today bounds in the system local tz, ISO with offset."""
+    now = datetime.now().astimezone()
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    return start.isoformat(), end.isoformat()
+
+
+def _reminders_from_payload(payload: list[dict[str, Any]]) -> list[ReminderRow]:
+    out: list[ReminderRow] = []
+    for item in payload or []:
+        out.append(
+            ReminderRow(
+                id="",
+                event_id="",
+                minutes_before=int(item["minutes_before"]),
+                mode=str(item.get("mode") or "tts"),
+                custom_text=item.get("custom_text"),
+            )
+        )
+    return out
+
+
+@app.get(
+    "/api/events",
+    tags=["events"],
+    summary="List events",
+    description=(
+        "All known events (HOA-extracted and manual) within an optional "
+        "window. Each event lists its reminders so a UI or home-automation "
+        "consumer can render the upcoming agenda."
+    ),
+)
+async def list_events(
+    starts_after: str | None = Query(default=None),
+    starts_before: str | None = Query(default=None),
+    today_only: bool = Query(default=False),
+    _: Session | None = Depends(require_read),
+):
+    if today_only:
+        starts_after, starts_before = _today_window_iso()
+    events = await event_store.list_events(
+        starts_after=starts_after, starts_before=starts_before,
+    )
+    return {"events": [event_to_dict(e) for e in events]}
+
+
+@app.get("/api/events/today", tags=["events"], summary="Today's events")
+async def list_events_today(_: Session | None = Depends(require_read)):
+    """Convenience endpoint: today's events in the server's local tz.
+    Use this from a Home Assistant template sensor or a wall display."""
+    start, end = _today_window_iso()
+    events = await event_store.list_events(
+        starts_after=start, starts_before=end,
+    )
+    return {"date": start[:10], "events": [event_to_dict(e) for e in events]}
+
+
+@app.post("/api/events", tags=["events"], summary="Create manual event")
+async def create_event(
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Create a manual event. Required: ``title``, ``starts_at`` (ISO with
+    tz). Optional: ``ends_at``, ``notes``, ``is_special``, ``reminders``
+    (list of ``{minutes_before, mode, custom_text}``)."""
+    try:
+        title = str(body["title"])
+        starts_at = str(body["starts_at"])
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=f"missing field: {exc}")
+    reminders = _reminders_from_payload(body.get("reminders") or [])
+    ev = EventRow(
+        id="",
+        source="manual",
+        source_ref=None,
+        title=title,
+        starts_at=starts_at,
+        ends_at=body.get("ends_at"),
+        notes=body.get("notes"),
+        is_special=bool(body.get("is_special", True)),
+        reminders=reminders,
+    )
+    saved = await event_store.insert_manual(ev)
+    fresh = await event_store.get(saved.id)
+    return event_to_dict(fresh) if fresh else event_to_dict(saved)
+
+
+@app.put("/api/events/{event_id}", tags=["events"], summary="Update event")
+async def update_event(
+    event_id: str,
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Patch any subset of: ``title``, ``starts_at``, ``ends_at``, ``notes``,
+    ``is_special``, ``snoozed``. Touching the event marks it user-edited
+    so the HOA ingest won't overwrite the changes on next refresh."""
+    await event_store.update(
+        event_id,
+        title=body.get("title"),
+        starts_at=body.get("starts_at"),
+        ends_at=body.get("ends_at"),
+        notes=body.get("notes"),
+        is_special=body.get("is_special"),
+        snoozed=body.get("snoozed"),
+    )
+    fresh = await event_store.get(event_id)
+    if not fresh:
+        raise HTTPException(status_code=404, detail="event not found")
+    return event_to_dict(fresh)
+
+
+@app.delete("/api/events/{event_id}", tags=["events"], summary="Delete event")
+async def delete_event(
+    event_id: str, _: Session | None = Depends(require_read),
+):
+    await event_store.delete(event_id)
+    return {"ok": True}
+
+
+@app.put(
+    "/api/events/{event_id}/reminders",
+    tags=["events"],
+    summary="Set reminders for an event",
+)
+async def put_event_reminders(
+    event_id: str,
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Replace this event's reminder list. Body: ``{"reminders": [{
+    "minutes_before": 60, "mode": "tts", "custom_text": null}]}``.
+    ``minutes_before=0`` means fire at start time."""
+    reminders = _reminders_from_payload(body.get("reminders") or [])
+    await event_store.set_reminders(event_id, reminders)
+    fresh = await event_store.get(event_id)
+    if not fresh:
+        raise HTTPException(status_code=404, detail="event not found")
+    return event_to_dict(fresh)
+
+
+@app.post(
+    "/api/events/{event_id}/say",
+    tags=["events"],
+    summary="Speak this event now (test reminder)",
+)
+async def post_event_say(
+    event_id: str,
+    _: Session | None = Depends(require_read),
+):
+    """Speak the event's title through the local TTS service immediately.
+    Handy for testing audio routing without waiting for a real reminder."""
+    ev = await event_store.get(event_id)
+    if not ev:
+        raise HTTPException(status_code=404, detail="event not found")
+    ok = await tts_say(f"Reminder: {ev.title}")
+    return {"ok": ok}
+
+
+@app.post(
+    "/api/events/ingest_hoa",
+    tags=["events"],
+    summary="Force HOA event ingest",
+)
+async def post_ingest_hoa(_: Session | None = Depends(require_read)):
+    """Trigger an out-of-band ingest of the HOA weekly PDF. Use this after
+    PUTing a new HOA widget config or to pick up a freshly published PDF
+    without waiting for the hourly tick."""
+    await events_ingest_once(event_store, widget_store)
+    return {"ok": True}
+
+
+@app.post("/api/tts/say", tags=["tts"], summary="Speak arbitrary text")
+async def post_tts_say(
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Generic passthrough to the local TTS service. Body:
+    ``{"text": "anything you want spoken"}``. Used by the per-event
+    test button and exposed so home automation can use it too."""
+    text = str(body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="missing text")
+    ok = await tts_say(text)
+    return {"ok": ok}
 
 
 @app.get("/api/health")

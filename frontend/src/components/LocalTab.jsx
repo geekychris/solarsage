@@ -3,6 +3,7 @@ import { api } from "../api.js";
 import TideWidget from "./widgets/TideWidget.jsx";
 import BorderWidget from "./widgets/BorderWidget.jsx";
 import HoaWidget from "./widgets/HoaWidget.jsx";
+import EventsWidget from "./widgets/EventsWidget.jsx";
 
 const RENDERERS = {
   tides: TideWidget,
@@ -86,6 +87,20 @@ export default function LocalTab({ tzOffsetMinutes }) {
   }
   return (
     <div className="local-grid">
+      <div className="panel widget-card">
+        <div className="widget-head">
+          <div>
+            <h3 style={{ margin: 0 }}>Today's events</h3>
+            <div className="muted" style={{ fontSize: 12 }}>
+              HOA activities (auto-extracted) and manual events. Reminders
+              are spoken through the pi5 speaker.
+            </div>
+          </div>
+        </div>
+        <div className="widget-body">
+          <EventsWidget />
+        </div>
+      </div>
       {widgets.map((w) => (
         <WidgetCard
           key={w.id}

@@ -197,5 +197,36 @@ async def widget_data(widget_id: str) -> dict:
     return await _get(f"/api/widgets/{widget_id}/data")
 
 
+# ---------------------------------------------------------------------------
+# Events + reminders — auto-extracted from the HOA weekly PDF plus any
+# manual events the user adds. The reminder scheduler fires TTS through
+# the local pi5 speaker.
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def list_events_today() -> dict:
+    """Today's scheduled events in the Pi's local timezone — HOA recreational
+    activities plus any user-added entries. Each event has ``starts_at``,
+    ``title``, ``is_special`` (True for non-routine activities), and a
+    list of reminders.
+    """
+    return await _get("/api/events/today")
+
+
+@mcp.tool()
+async def list_events(
+    starts_after: str | None = None,
+    starts_before: str | None = None,
+) -> dict:
+    """List events within an ISO-8601 window. Omit both for everything."""
+    params = {}
+    if starts_after:
+        params["starts_after"] = starts_after
+    if starts_before:
+        params["starts_before"] = starts_before
+    return await _get("/api/events", params=params or None)
+
+
 if __name__ == "__main__":
     mcp.run()
