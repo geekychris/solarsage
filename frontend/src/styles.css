@@ -527,12 +527,42 @@ select, input {
 .widget-body { flex: 1; }
 .error-inline { color: #f08080; font-size: 12px; }
 
-.tide-stations { display: flex; flex-direction: column; gap: 12px; }
+.tide-stations { display: flex; flex-direction: column; gap: 16px; }
+.tide-station { display: flex; flex-direction: column; gap: 8px; }
+.tide-day-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.tide-day-card {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border, #2a2f37);
+}
+.tide-day-card-hl {
+  background: rgba(108, 209, 255, 0.06);
+  border-color: rgba(108, 209, 255, 0.3);
+}
+.tide-day-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+.tide-day-label { font-weight: 600; font-size: 13px; }
+.tide-day-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+.tide-day-table td { padding: 2px 4px; }
+.tide-future summary { cursor: pointer; padding: 4px 0; font-size: 12px; }
 .tide-table { width: 100%; font-size: 13px; border-collapse: collapse; }
 .tide-table th,
 .tide-table td { padding: 3px 8px; border-bottom: 1px solid var(--border, #2a2f37); }
 .tide-high { color: #6cd1ff; font-weight: 600; }
 .tide-low  { color: #ffae6c; font-weight: 600; }
+
+@media (max-width: 500px) {
+  .tide-day-row { grid-template-columns: 1fr; }
+}
 
 .border-table { width: 100%; font-size: 13px; border-collapse: collapse; }
 .border-table th,
