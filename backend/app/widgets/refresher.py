@@ -14,16 +14,29 @@ log = logging.getLogger("eg4.widgets")
 
 
 async def _refresh_once(widget: Widget, store: WidgetStore) -> None:
-    config = await store.get_config(widget.id)
+    try:
+        config = await store.get_config(widget.id)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("widget %s: get_config failed: %s", widget.id, exc)
+        config = None
     if config is None:
         config = dict(widget.default_config)
     try:
         data = await widget.fetch(config)
+    except Exception as exc:  # noqa: BLE001 — surface anything to the store
+        log.warning("widget %s fetch failed: %s", widget.id, exc)
+        try:
+            await store.record_error(widget.id, f"{exc.__class__.__name__}: {exc}")
+        except Exception as exc2:  # noqa: BLE001
+            # Keep the loop alive even if the store itself is unhappy —
+            # the next tick will retry.
+            log.error("widget %s: record_error failed: %s", widget.id, exc2)
+        return
+    try:
         await store.record_success(widget.id, data)
         log.info("widget %s refreshed", widget.id)
-    except Exception as exc:  # noqa: BLE001 — surface anything to the store
-        log.warning("widget %s refresh failed: %s", widget.id, exc)
-        await store.record_error(widget.id, f"{exc.__class__.__name__}: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        log.error("widget %s: record_success failed: %s", widget.id, exc)
 
 
 async def _widget_loop(widget: Widget, store: WidgetStore) -> None:

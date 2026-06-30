@@ -11,12 +11,29 @@ import aiosqlite
 from .base import WidgetState
 
 
+# The widget store shares the EG4 history DB with the high-frequency poller
+# and the alerts watcher, so contention is real. WAL lets concurrent readers
+# run while a single writer is active; busy_timeout makes writers queue
+# briefly instead of giving up with "database is locked".
+#
+# WAL is persisted in the DB file header so a single PRAGMA at init time
+# flips the whole database. busy_timeout is per-connection — apply it on
+# every connect so writes from this module always wait their turn.
+async def _connect(db_path: str) -> aiosqlite.Connection:
+    db = await aiosqlite.connect(db_path)
+    await db.execute("PRAGMA busy_timeout=5000")
+    return db
+
+
 class WidgetStore:
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
 
     async def init(self) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        db = await _connect(self.db_path)
+        try:
+            await db.execute("PRAGMA journal_mode=WAL")
+            await db.execute("PRAGMA synchronous=NORMAL")
             await db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS widget_state (
@@ -36,14 +53,19 @@ class WidgetStore:
                 """
             )
             await db.commit()
+        finally:
+            await db.close()
 
     async def get_state(self, widget_id: str) -> WidgetState | None:
-        async with aiosqlite.connect(self.db_path) as db:
+        db = await _connect(self.db_path)
+        try:
             cur = await db.execute(
                 "SELECT fetched_at, data_json, error FROM widget_state WHERE widget_id=?",
                 (widget_id,),
             )
             row = await cur.fetchone()
+        finally:
+            await db.close()
         if not row:
             return None
         fetched_at, data_json, error = row
@@ -54,7 +76,8 @@ class WidgetStore:
         )
 
     async def put_state(self, widget_id: str, state: WidgetState) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        db = await _connect(self.db_path)
+        try:
             await db.execute(
                 """
                 INSERT INTO widget_state(widget_id, fetched_at, data_json, error)
@@ -72,6 +95,8 @@ class WidgetStore:
                 ),
             )
             await db.commit()
+        finally:
+            await db.close()
 
     async def record_error(self, widget_id: str, error: str) -> None:
         prev = await self.get_state(widget_id)
@@ -90,18 +115,22 @@ class WidgetStore:
         )
 
     async def get_config(self, widget_id: str) -> dict[str, Any] | None:
-        async with aiosqlite.connect(self.db_path) as db:
+        db = await _connect(self.db_path)
+        try:
             cur = await db.execute(
                 "SELECT config_json FROM widget_config WHERE widget_id=?",
                 (widget_id,),
             )
             row = await cur.fetchone()
+        finally:
+            await db.close()
         if not row:
             return None
         return json.loads(row[0])
 
     async def put_config(self, widget_id: str, config: dict[str, Any]) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        db = await _connect(self.db_path)
+        try:
             await db.execute(
                 """
                 INSERT INTO widget_config(widget_id, config_json)
@@ -111,3 +140,5 @@ class WidgetStore:
                 (widget_id, json.dumps(config)),
             )
             await db.commit()
+        finally:
+            await db.close()

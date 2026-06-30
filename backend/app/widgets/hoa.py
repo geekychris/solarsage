@@ -52,16 +52,40 @@ def _extract_pdf_links(html: str, base_url: str) -> list[dict[str, str]]:
     return deduped
 
 
+MONTH_NAMES = (
+    "january february march april may june july august september october "
+    "november december"
+).split()
+MONTH_RE = re.compile(
+    r"\b(?:" + "|".join(MONTH_NAMES) + r")\b[^a-z]*\b20\d{2}\b",
+    re.IGNORECASE,
+)
+
+
 def _classify_calendar_links(links: list[dict[str, str]]) -> dict[str, Any]:
-    """Best-effort: find 'monthly' and 'weekly' calendar PDFs by label."""
+    """Best-effort: find 'monthly' and 'weekly' calendar PDFs by label.
+
+    The HOA labels weekly calendars as "June 29 - July 5, 2026" and monthly
+    ones as bare "June 2026" — neither contains the words "weekly"/"monthly".
+    Heuristic: a label with TWO date ranges or a "DD - " span is weekly; a
+    label that is just "<MonthName> <YYYY>" is monthly.
+    """
     monthly = None
     weekly = None
     for link in links:
-        lab = link["label"].lower()
-        if monthly is None and ("month" in lab or re.search(r"calendar.*\b\d{4}\b", lab)):
-            monthly = link
-        if weekly is None and "week" in lab:
+        lab = link["label"].strip()
+        low = lab.lower()
+        looks_weekly = (
+            "week" in low
+            or re.search(r"\b\d{1,2}\s*[-–]\s*\d{1,2}\b", lab)  # "29 - 5"
+            or re.search(r"-\s*[A-Za-z]+\s+\d{1,2}", lab)            # "- July 5"
+        )
+        looks_monthly = bool(MONTH_RE.fullmatch(lab) or MONTH_RE.match(lab))
+        if weekly is None and looks_weekly:
             weekly = link
+            continue
+        if monthly is None and looks_monthly and not looks_weekly:
+            monthly = link
     return {"monthly_pdf": monthly, "weekly_pdf": weekly}
 
 
