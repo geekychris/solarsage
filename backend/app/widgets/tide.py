@@ -45,6 +45,8 @@ class TideWidget(Widget):
         "California (Sea of Cortez). Data from worldtides.info."
     )
     refresh_seconds = 6 * 3600  # 4× a day; one credit per fetch per station
+    default_tab = "Outdoor"
+    default_position = 10
 
     data_schema = {
         "type": "object",

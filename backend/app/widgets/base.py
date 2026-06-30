@@ -32,6 +32,10 @@ class Widget:
     name: str = ""
     description: str = ""
     refresh_seconds: int = 3600
+    # Default tab + position for layout. Users can override via per-widget
+    # config; the UI groups by ``tab`` and orders within a tab by ``position``.
+    default_tab: str = "Local"
+    default_position: int = 100
     # JSON-schema-ish hint of what ``data`` looks like — informational only,
     # not validated. Helps the LLM know what fields to ask about.
     data_schema: dict[str, Any] = {}
@@ -47,6 +51,8 @@ class Widget:
             "name": self.name,
             "description": self.description,
             "refresh_seconds": self.refresh_seconds,
+            "default_tab": self.default_tab,
+            "default_position": self.default_position,
             "data_schema": self.data_schema,
             "config_schema": self.config_schema,
             "default_config": self.default_config,

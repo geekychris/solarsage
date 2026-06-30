@@ -71,6 +71,8 @@ class BorderWidget(Widget):
         "``port_numbers`` accepts any port number from the CBP feed."
     )
     refresh_seconds = 15 * 60  # CBP updates every ~10-15 min
+    default_tab = "Travel"
+    default_position = 10
 
     data_schema = {
         "type": "object",

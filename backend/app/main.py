@@ -45,6 +45,17 @@ from .widgets.refresher import refresh_now as widget_refresh_now
 from .widgets.tide import TideWidget
 from .widgets.border import BorderWidget
 from .widgets.hoa import HoaWidget
+from .widgets.safety_quakes import QuakesWidget
+from .widgets.safety_storms import StormsWidget
+from .widgets.safety_uv import UvHeatWidget
+from .widgets.outdoor_marine import MarineWidget
+from .widgets.outdoor_sunmoon import SunMoonWidget
+from .widgets.travel_currency import CurrencyWidget
+from .widgets.travel_drive import DriveTimeWidget
+from .widgets.travel_holidays import HolidaysWidget
+from .widgets.solar_excess import SolarExcessWidget
+from .widgets.solar_precool import PrecoolWidget
+from .widgets.community_newsletter import NewsletterWidget
 from .events import EventStore, run_reminder_scheduler
 from .events.store import Event as EventRow, Reminder as ReminderRow, event_to_dict
 from .events.scheduler import _ingest_once as events_ingest_once
@@ -73,7 +84,27 @@ def _register_builtin_widgets() -> None:
     a class + register it here; nothing else in main.py needs to change."""
     # Idempotent: register on app import, but skip dupes so reload-in-place
     # during dev doesn't crash.
-    for widget in (TideWidget(), HoaWidget(), BorderWidget()):
+    for widget in (
+        TideWidget(),
+        HoaWidget(),
+        BorderWidget(),
+        # Safety
+        QuakesWidget(),
+        StormsWidget(),
+        UvHeatWidget(),
+        # Outdoor
+        MarineWidget(),
+        SunMoonWidget(),
+        # Travel
+        CurrencyWidget(),
+        DriveTimeWidget(),
+        HolidaysWidget(),
+        # Solar synergy
+        SolarExcessWidget(),
+        PrecoolWidget(),
+        # Community
+        NewsletterWidget(),
+    ):
         if widget_registry.get(widget.id) is None:
             widget_registry.register(widget)
 
@@ -1656,15 +1687,45 @@ def _require_widget(widget_id: str):
 async def _widget_payload(w, *, include_data: bool = True) -> dict[str, Any]:
     config = await widget_store.get_config(w.id) or dict(w.default_config)
     state = await widget_store.get_state(w.id)
+    # Layout (tab + position) live in config so users can override per
+    # widget. Fall back to the widget's class defaults.
+    layout = {
+        "tab": config.get("_tab") or w.default_tab,
+        "position": int(config.get("_position", w.default_position)),
+    }
     body: dict[str, Any] = {
         "meta": w.meta(),
         "config": config,
+        "layout": layout,
         "fetched_at": state.fetched_at if state else None,
         "error": state.error if state else None,
     }
     if include_data:
         body["data"] = state.data if state else None
     return body
+
+
+@app.put(
+    "/api/widgets/{widget_id}/layout",
+    tags=["widgets"],
+    summary="Set widget tab + position",
+)
+async def put_widget_layout(
+    widget_id: str,
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Move a widget between tabs / change its position within a tab.
+    Body: ``{"tab": "Safety", "position": 10}``. Either field is
+    optional; whichever is omitted keeps its current value."""
+    w = _require_widget(widget_id)
+    config = await widget_store.get_config(w.id) or dict(w.default_config)
+    if "tab" in body and body["tab"]:
+        config["_tab"] = str(body["tab"])
+    if "position" in body and body["position"] is not None:
+        config["_position"] = int(body["position"])
+    await widget_store.put_config(w.id, config)
+    return {"id": w.id, **(await _widget_payload(w, include_data=False))}
 
 
 @app.get("/api/widgets", tags=["widgets"], summary="List all widgets")

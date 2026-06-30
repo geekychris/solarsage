@@ -160,6 +160,8 @@ class HoaWidget(Widget):
         "it can detect. Click the PDF for the full schedule."
     )
     refresh_seconds = 6 * 3600
+    default_tab = "Community"
+    default_position = 50
 
     data_schema = {
         "type": "object",
