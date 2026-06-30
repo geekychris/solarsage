@@ -56,6 +56,7 @@ from .widgets.travel_holidays import HolidaysWidget
 from .widgets.solar_excess import SolarExcessWidget
 from .widgets.solar_precool import PrecoolWidget
 from .widgets.community_newsletter import NewsletterWidget
+from .widgets.weather import WeatherWidget
 from .events import EventStore, run_reminder_scheduler
 from .events.store import Event as EventRow, Reminder as ReminderRow, event_to_dict
 from .events.scheduler import _ingest_once as events_ingest_once
@@ -93,6 +94,7 @@ def _register_builtin_widgets() -> None:
         StormsWidget(),
         UvHeatWidget(),
         # Outdoor
+        WeatherWidget(),
         MarineWidget(),
         SunMoonWidget(),
         # Travel

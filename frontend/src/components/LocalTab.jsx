@@ -15,6 +15,8 @@ import HolidaysWidget from "./widgets/HolidaysWidget.jsx";
 import SolarExcessWidget from "./widgets/SolarExcessWidget.jsx";
 import PrecoolWidget from "./widgets/PrecoolWidget.jsx";
 import NewsletterWidget from "./widgets/NewsletterWidget.jsx";
+import WeatherWidget from "./widgets/WeatherWidget.jsx";
+import WidgetSettings from "./WidgetSettings.jsx";
 
 const RENDERERS = {
   tides: TideWidget,
@@ -31,6 +33,7 @@ const RENDERERS = {
   solar_excess: SolarExcessWidget,
   precool: PrecoolWidget,
   hoa_newsletter: NewsletterWidget,
+  weather: WeatherWidget,
 };
 
 // Stable order for subtabs when more than one is present.
@@ -78,6 +81,7 @@ function MoveControls({ widget, allTabs, onMove }) {
 function WidgetCard({ widget, tzOffsetMinutes, onRefreshed, allTabs, onMove }) {
   const Renderer = RENDERERS[widget.meta.kind];
   const [busy, setBusy] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const refresh = useCallback(async () => {
     setBusy(true);
     try {
@@ -91,17 +95,20 @@ function WidgetCard({ widget, tzOffsetMinutes, onRefreshed, allTabs, onMove }) {
   return (
     <div className="panel widget-card">
       <div className="widget-head">
-        <div>
+        <div className="widget-title">
           <h3 style={{ margin: 0 }}>{widget.meta.name}</h3>
-          <div className="muted" style={{ fontSize: 12 }}>
-            {widget.meta.description}
-          </div>
+          <span
+            className="info-icon"
+            title={widget.meta.description}
+            aria-label="About this widget"
+          >ⓘ</span>
         </div>
         <div className="widget-head-meta">
           <FetchedAt ts={widget.fetched_at} error={widget.error} />
-          <button onClick={refresh} disabled={busy}>
-            {busy ? "…" : "Refresh"}
+          <button onClick={refresh} disabled={busy} title="Refresh now">
+            {busy ? "…" : "↻"}
           </button>
+          <button onClick={() => setSettingsOpen(true)} title="Settings">⚙</button>
           <MoveControls widget={widget} allTabs={allTabs} onMove={onMove} />
         </div>
       </div>
@@ -114,6 +121,13 @@ function WidgetCard({ widget, tzOffsetMinutes, onRefreshed, allTabs, onMove }) {
           </pre>
         )}
       </div>
+      {settingsOpen && (
+        <WidgetSettings
+          widget={widget}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={onRefreshed}
+        />
+      )}
     </div>
   );
 }
@@ -242,11 +256,13 @@ export default function LocalTab({ tzOffsetMinutes }) {
           w.id === "_events" ? (
             <div key="_events" className="panel widget-card">
               <div className="widget-head">
-                <div>
+                <div className="widget-title">
                   <h3 style={{ margin: 0 }}>{w.meta.name}</h3>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {w.meta.description}
-                  </div>
+                  <span
+                    className="info-icon"
+                    title={w.meta.description}
+                    aria-label="About"
+                  >ⓘ</span>
                 </div>
                 <div className="widget-head-meta">
                   <span className="muted" style={{ fontSize: 11 }}>pinned</span>

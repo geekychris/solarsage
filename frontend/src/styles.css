@@ -839,6 +839,176 @@ select, input {
   font-weight: 600;
 }
 
+/* Info icon (replaces inline description text) */
+.widget-title { display: flex; align-items: center; gap: 6px; }
+.info-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--muted, #888);
+  color: var(--muted, #888);
+  font-size: 11px;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+  user-select: none;
+}
+.info-icon:hover {
+  border-color: #6cd1ff;
+  color: #6cd1ff;
+}
+
+/* Weather */
+.weather { display: flex; flex-direction: column; gap: 10px; }
+.weather-now {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border, #2a2f37);
+}
+.weather-icon { font-size: 36px; }
+.weather-now-main {
+  display: flex;
+  flex-direction: column;
+}
+.weather-big { font-size: 22px; font-weight: 700; }
+.weather-now-meta {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  gap: 2px;
+  text-align: right;
+}
+.weather-days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  gap: 4px;
+}
+.weather-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.03);
+  font-size: 11px;
+  gap: 2px;
+}
+.weather-day-label { font-weight: 600; }
+.weather-day-icon { font-size: 20px; }
+.weather-day-temps { display: flex; gap: 6px; }
+.weather-high { font-weight: 600; }
+.weather-day-meta { display: flex; gap: 4px; font-size: 10px; }
+
+/* Cloud pill in solar excess */
+.excess-context {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.cloud-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.cloud-clear    { background: rgba(255, 215, 0, 0.15);   color: #ffd166; }
+.cloud-partly   { background: rgba(108, 209, 255, 0.15); color: #6cd1ff; }
+.cloud-cloudy   { background: rgba(200, 200, 200, 0.15); color: #aaa; }
+.cloud-overcast { background: rgba(120, 120, 120, 0.25); color: #888; }
+
+/* Settings modal */
+.modal-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal {
+  background: var(--panel, #181c22);
+  border: 1px solid var(--border, #2a2f37);
+  border-radius: 8px;
+  padding: 16px;
+  width: min(560px, 90vw);
+  max-height: 85vh;
+  overflow: auto;
+}
+.modal h3 { margin: 0 0 8px; }
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #2a2f37);
+}
+.modal-actions .primary {
+  background: #6cd1ff;
+  color: #002a3a;
+  font-weight: 600;
+}
+.settings-form { display: flex; flex-direction: column; gap: 12px; }
+.settings-field { display: flex; flex-direction: column; gap: 4px; }
+.settings-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.settings-field input[type="text"],
+.settings-field input[type="number"],
+.settings-field select {
+  padding: 4px 8px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border, #2a2f37);
+  color: inherit;
+  border-radius: 4px;
+}
+
+/* Loads / stations / ports editors */
+.loads-editor, .stations-editor, .ports-editor { display: flex; flex-direction: column; gap: 4px; }
+.load-edit-row, .station-edit-row {
+  display: grid;
+  grid-template-columns: auto 1fr 80px auto auto;
+  gap: 6px;
+  align-items: center;
+  padding: 4px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.02);
+}
+.load-edit-row input[type="text"],
+.load-edit-row input[type="number"],
+.station-edit-row input {
+  padding: 3px 6px;
+  font-size: 12px;
+}
+.add-load-btn {
+  align-self: flex-start;
+  margin-top: 4px;
+  background: none;
+  border: 1px dashed var(--border, #2a2f37);
+  color: var(--muted, #888);
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.add-load-btn:hover {
+  border-color: #6cd1ff;
+  color: #6cd1ff;
+}
+
 /* Print / Save-as-PDF: light theme, full-width, no clipped charts. */
 @media print {
   @page {

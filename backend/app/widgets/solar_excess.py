@@ -27,11 +27,16 @@ from .base import Widget
 OM_URL = "https://api.open-meteo.com/v1/forecast"
 
 DEFAULT_LOADS = [
-    {"name": "EV charge (slow)", "kwh": 7.0, "ideal_hours": [10, 11, 12, 13, 14]},
-    {"name": "Pool pump (4h)",   "kwh": 4.0, "ideal_hours": [10, 11, 12, 13]},
-    {"name": "Dishwasher",       "kwh": 1.5, "ideal_hours": [11, 12, 13]},
-    {"name": "Laundry (warm)",   "kwh": 1.0, "ideal_hours": [11, 12, 13, 14]},
-    {"name": "Pre-cool house",   "kwh": 6.0, "ideal_hours": [12, 13, 14, 15]},
+    {"name": "EV charge (slow)", "kwh": 7.0, "enabled": False,
+     "ideal_hours": [10, 11, 12, 13, 14]},
+    {"name": "Pool pump (4h)",   "kwh": 4.0, "enabled": False,
+     "ideal_hours": [10, 11, 12, 13]},
+    {"name": "Dishwasher",       "kwh": 1.5, "enabled": True,
+     "ideal_hours": [11, 12, 13]},
+    {"name": "Laundry (warm)",   "kwh": 1.0, "enabled": True,
+     "ideal_hours": [11, 12, 13, 14]},
+    {"name": "Pre-cool house",   "kwh": 6.0, "enabled": True,
+     "ideal_hours": [12, 13, 14, 15]},
 ]
 
 
@@ -126,11 +131,16 @@ class SolarExcessWidget(Widget):
         windows.sort(key=lambda x: x[1], reverse=True)
         best_window = sorted(w[0] for w in windows[:4])
 
-        # Rank suggested loads to fit within excess_kwh
+        # Rank suggested loads to fit within excess_kwh. Loads with
+        # ``enabled: False`` are excluded entirely — the user has told us
+        # they don't have that load (no pool pump, no EV, etc.).
         loads = list(config.get("loads") or DEFAULT_LOADS)
+        active_loads = [
+            ld for ld in loads if ld.get("enabled", True) is not False
+        ]
         remaining = excess_kwh
         suggested = []
-        for ld in loads:
+        for ld in active_loads:
             kwh = float(ld.get("kwh", 0))
             if kwh <= remaining + 0.1:
                 suggested.append({**ld, "fits": True})

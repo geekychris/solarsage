@@ -5,11 +5,29 @@ function formatTime(iso) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric" });
 }
 
+function cloudBadge(cloud) {
+  if (cloud == null) return null;
+  let cls = "cloud-clear";
+  let label = "clear";
+  if (cloud >= 80)      { cls = "cloud-overcast"; label = "overcast"; }
+  else if (cloud >= 50) { cls = "cloud-cloudy";   label = "cloudy"; }
+  else if (cloud >= 25) { cls = "cloud-partly";   label = "partly cloudy"; }
+  return <span className={`cloud-pill ${cls}`}>☁ {Math.round(cloud)}% · {label}</span>;
+}
+
 export default function SolarExcessWidget({ data }) {
   if (!data || !data.today) return <div className="muted">Loading…</div>;
   const t = data.today;
   return (
     <div className="excess">
+      <div className="excess-context">
+        {cloudBadge(t.cloud_mean_pct)}
+        {t.sunshine_hours != null && (
+          <span className="muted" style={{ fontSize: 12 }}>
+            ☀ {t.sunshine_hours} h sun
+          </span>
+        )}
+      </div>
       <div className="excess-stats">
         <div className="excess-tile">
           <span className="muted" style={{ fontSize: 11 }}>Production</span>
@@ -34,7 +52,9 @@ export default function SolarExcessWidget({ data }) {
       )}
       <div className="excess-loads">
         <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
-          Suggested loads (fits in today's surplus)
+          {(data.suggested_loads || []).length === 0
+            ? "No loads enabled — open Settings to add some."
+            : "Suggested loads (fits in today's surplus)"}
         </div>
         {(data.suggested_loads || []).map((ld, i) => (
           <div key={i} className={`excess-load ${ld.fits ? "fits" : "noroom"}`}>
