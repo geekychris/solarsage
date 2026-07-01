@@ -37,12 +37,23 @@ class BajaNewsWidget(Widget):
     }
     default_config = {
         "feeds": [
-            {"label": "El Imparcial (Tijuana/Mexicali)",
-             "url": "https://www.elimparcial.com/rss/mexicali.xml"},
-            {"label": "BCS Noticias",
-             "url": "https://www.bcsnoticias.mx/feed/"},
             {"label": "Tribuna de San Luis",
              "url": "https://www.tribuna.com.mx/rss/tribuna-de-san-luis"},
+            {"label": "Google News · San Felipe BC",
+             "url": (
+                 "https://news.google.com/rss/search?"
+                 "q=%22San+Felipe%22+%22Baja+California%22&hl=es-419&gl=MX&ceid=MX:es"
+             )},
+            {"label": "Google News · Mexicali",
+             "url": (
+                 "https://news.google.com/rss/search?"
+                 "q=Mexicali&hl=es-419&gl=MX&ceid=MX:es"
+             )},
+            {"label": "Google News · Baja California",
+             "url": (
+                 "https://news.google.com/rss/search?"
+                 "q=%22Baja+California%22&hl=es-419&gl=MX&ceid=MX:es"
+             )},
         ],
         "max_items_per_feed": 5,
     }
@@ -59,7 +70,14 @@ class BajaNewsWidget(Widget):
                 try:
                     async with http.get(
                         url, timeout=20,
-                        headers={"User-Agent": "SolarSage/1.0 (baja news)"},
+                        headers={
+                            "User-Agent": (
+                                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                                "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+                                "Version/17.0 Safari/605.1.15"
+                            ),
+                            "Accept": "application/rss+xml, application/xml, */*",
+                        },
                     ) as r:
                         r.raise_for_status()
                         body = await r.text()

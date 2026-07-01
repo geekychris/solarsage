@@ -1096,6 +1096,22 @@ select, input {
   background: rgba(255,255,255,0.05);
 }
 .news-title { color: #6cd1ff; font-size: 13px; }
+.news-title-link { text-decoration: none; color: inherit; }
+.news-translated {
+  font-size: 12px; padding: 4px 6px; margin-top: 3px;
+  background: rgba(255, 209, 102, 0.08);
+  border-left: 2px solid #ffd166;
+  border-radius: 3px;
+}
+.news-item-foot { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+.news-translate {
+  padding: 1px 6px; font-size: 10px;
+  background: none; border: 1px solid var(--border, #2a2f37);
+  color: var(--muted, #888); border-radius: 3px; cursor: pointer;
+}
+.news-translate:hover:not(:disabled) {
+  color: #ffd166; border-color: #ffd166;
+}
 
 /* Property mode */
 .property-mode {

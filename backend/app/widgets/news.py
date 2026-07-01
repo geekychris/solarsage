@@ -22,10 +22,59 @@ def _strip(s: str) -> str:
     return unescape(s).strip()
 
 
+def _regex_fallback(xml_text: str, source_url: str) -> dict[str, Any]:
+    """When strict XML parsing chokes (bad entities, unescaped ampersands,
+    HTML in RSS content), grab item titles + links with regex. Not
+    RSS-compliant but survives most malformed real-world feeds.
+    """
+    items = []
+    # Try RSS item blocks
+    for block in re.findall(r"(?is)<item\b[^>]*>(.*?)</item>", xml_text):
+        title_m = re.search(r"(?is)<title\b[^>]*>(.*?)</title>", block)
+        link_m = re.search(r"(?is)<link\b[^>]*>(.*?)</link>", block) \
+                 or re.search(r'(?is)<link\b[^>]*href="([^"]+)"', block)
+        pub_m = re.search(r"(?is)<pubDate\b[^>]*>(.*?)</pubDate>", block)
+        desc_m = re.search(r"(?is)<description\b[^>]*>(.*?)</description>", block)
+        if not title_m:
+            continue
+        items.append({
+            "title": _strip(_uncdata(title_m.group(1))),
+            "link": _strip(_uncdata(link_m.group(1))) if link_m else "",
+            "published": _strip(pub_m.group(1)) if pub_m else "",
+            "summary": _strip(_uncdata(desc_m.group(1)))[:300] if desc_m else "",
+        })
+    # Try Atom entries as fallback
+    if not items:
+        for block in re.findall(r"(?is)<entry\b[^>]*>(.*?)</entry>", xml_text):
+            title_m = re.search(r"(?is)<title\b[^>]*>(.*?)</title>", block)
+            link_m = re.search(r'(?is)<link\b[^>]*href="([^"]+)"', block)
+            pub_m = re.search(r"(?is)<updated\b[^>]*>(.*?)</updated>", block)
+            if not title_m:
+                continue
+            items.append({
+                "title": _strip(_uncdata(title_m.group(1))),
+                "link": link_m.group(1).strip() if link_m else "",
+                "published": _strip(pub_m.group(1)) if pub_m else "",
+                "summary": "",
+            })
+    title_m = re.search(r"(?is)<channel\b[^>]*>.*?<title\b[^>]*>(.*?)</title>", xml_text)
+    title = _strip(_uncdata(title_m.group(1))) if title_m else ""
+    return {"source": source_url, "title": title, "items": items,
+            "parser": "regex_fallback"}
+
+
+def _uncdata(s: str) -> str:
+    m = re.match(r"(?is)\s*<!\[CDATA\[(.*)\]\]>\s*$", s or "")
+    return m.group(1) if m else (s or "")
+
+
 def _parse_feed(xml_text: str, source_url: str) -> dict[str, Any]:
-    root = ET.fromstring(xml_text)
-    # RSS: <rss><channel><item>...</item></channel></rss>
-    # Atom: <feed><entry>...</entry></feed>
+    """Try strict XML first; on any parse error fall back to regex."""
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return _regex_fallback(xml_text, source_url)
+
     items = []
     title = ""
     channel = root.find("channel")

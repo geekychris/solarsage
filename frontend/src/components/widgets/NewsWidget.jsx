@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
+import { api } from "../../api.js";
 
 function prettyDate(s) {
   if (!s) return "";
@@ -7,6 +8,54 @@ function prettyDate(s) {
   return d.toLocaleString(undefined, {
     month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   });
+}
+
+function NewsItem({ item, defaultSource = "es" }) {
+  const [translated, setTranslated] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const doTranslate = useCallback(async (event) => {
+    event.preventDefault();
+    if (translated) { setTranslated(null); return; }
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await api.translate(item.title, defaultSource, "en");
+      setTranslated(r.target_text);
+    } catch (ex) {
+      setErr(ex.message || "translate failed");
+    } finally {
+      setBusy(false);
+    }
+  }, [translated, item.title, defaultSource]);
+
+  return (
+    <div className="news-item">
+      <a href={item.link} target="_blank" rel="noreferrer" className="news-title-link">
+        <div className="news-title">{item.title}</div>
+      </a>
+      {translated && (
+        <div className="news-translated">🌐 {translated}</div>
+      )}
+      <div className="news-item-foot">
+        {item.published && (
+          <span className="muted" style={{ fontSize: 11 }}>
+            {prettyDate(item.published)}
+          </span>
+        )}
+        <button
+          onClick={doTranslate}
+          disabled={busy}
+          className="news-translate"
+          title={translated ? "Hide translation" : "Translate to English"}
+        >
+          {busy ? "…" : translated ? "hide" : "🌐 EN"}
+        </button>
+      </div>
+      {err && <div className="error-inline">{err}</div>}
+    </div>
+  );
 }
 
 export default function NewsWidget({ data }) {
@@ -22,22 +71,14 @@ export default function NewsWidget({ data }) {
           <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
             {f.label}
             {f.error && <span className="error-inline"> · {f.error}</span>}
+            {f.parser === "regex_fallback" && (
+              <span style={{ marginLeft: 6, color: "#ffd166", fontSize: 10 }}>
+                (loose parse)
+              </span>
+            )}
           </div>
           {(f.items || []).map((it, j) => (
-            <a
-              key={j}
-              href={it.link}
-              target="_blank"
-              rel="noreferrer"
-              className="news-item"
-            >
-              <div className="news-title">{it.title}</div>
-              {it.published && (
-                <div className="muted" style={{ fontSize: 11 }}>
-                  {prettyDate(it.published)}
-                </div>
-              )}
-            </a>
+            <NewsItem key={j} item={it} defaultSource="es" />
           ))}
         </div>
       ))}

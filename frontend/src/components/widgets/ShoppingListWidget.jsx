@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { api } from "../../api.js";
 
-export default function ShoppingListWidget({ data }) {
+export default function ShoppingListWidget({ data, onChanged }) {
   const [newText, setNewText] = useState("");
   const [newCat, setNewCat] = useState("");
   const [busy, setBusy] = useState(false);
@@ -11,10 +11,11 @@ export default function ShoppingListWidget({ data }) {
     try {
       const cur = await api.getWidgetConfig("shopping_list");
       await api.putWidgetConfig("shopping_list", { ...cur.config, items });
+      if (onChanged) await onChanged();
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [onChanged]);
 
   if (!data) return <div className="muted">Loading…</div>;
   const items = data.items || [];

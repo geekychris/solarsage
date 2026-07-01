@@ -97,7 +97,7 @@ function ContactForm({ initial, onSave, onCancel }) {
   );
 }
 
-export default function ContactsWidget({ data }) {
+export default function ContactsWidget({ data, onChanged }) {
   const [filter, setFilter] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null); // {index, contact} or {new:true}
@@ -107,10 +107,11 @@ export default function ContactsWidget({ data }) {
     try {
       const cur = await api.getWidgetConfig("contacts");
       await api.putWidgetConfig("contacts", { ...cur.config, contacts });
+      if (onChanged) await onChanged();
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [onChanged]);
 
   if (!data) return <div className="muted">Loading…</div>;
   const contacts = data.contacts || [];

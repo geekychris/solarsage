@@ -8,7 +8,7 @@ function prettyDate(s) {
   });
 }
 
-export default function PropertyTaxWidget({ data }) {
+export default function PropertyTaxWidget({ data, onChanged }) {
   const [busy, setBusy] = useState(false);
   if (!data) return <div className="muted">Loading…</div>;
 
@@ -19,10 +19,11 @@ export default function PropertyTaxWidget({ data }) {
       const year = new Date().getFullYear();
       const paid_year = cur.config.paid_year === year ? null : year;
       await api.putWidgetConfig("property_tax", { ...cur.config, paid_year });
+      if (onChanged) await onChanged();
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [onChanged]);
 
   return (
     <div className="property-tax">

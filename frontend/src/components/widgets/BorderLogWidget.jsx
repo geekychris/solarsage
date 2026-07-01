@@ -57,7 +57,7 @@ function LogForm({ initial, onSave, onCancel }) {
   );
 }
 
-export default function BorderLogWidget({ data }) {
+export default function BorderLogWidget({ data, onChanged }) {
   const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -66,10 +66,11 @@ export default function BorderLogWidget({ data }) {
     try {
       const cur = await api.getWidgetConfig("border_log");
       await api.putWidgetConfig("border_log", { ...cur.config, crossings });
+      if (onChanged) await onChanged();
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [onChanged]);
 
   if (!data) return <div className="muted">Loading…</div>;
   const crossings = data.crossings || [];

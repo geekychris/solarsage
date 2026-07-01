@@ -150,11 +150,21 @@ function WidgetCard({ widget, tzOffsetMinutes, onRefreshed, allTabs, onMove }) {
       </div>
       <div className="widget-body">
         {Renderer ? (
-          <Renderer data={widget.data} tzOffsetMinutes={tzOffsetMinutes} />
+          <Renderer
+            data={widget.data}
+            tzOffsetMinutes={tzOffsetMinutes}
+            onChanged={onRefreshed}
+          />
         ) : (
-          <pre style={{ overflow: "auto", maxHeight: 200 }}>
-            {JSON.stringify(widget.data, null, 2)}
-          </pre>
+          <div>
+            <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
+              (unknown widget kind '{widget.meta.kind}' — hard-refresh the
+              page if you just deployed; otherwise raw JSON below)
+            </div>
+            <pre style={{ overflow: "auto", maxHeight: 200 }}>
+              {JSON.stringify(widget.data, null, 2)}
+            </pre>
+          </div>
         )}
       </div>
       {settingsOpen && (
