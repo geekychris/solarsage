@@ -1,35 +1,48 @@
 #!/usr/bin/env bash
-# Add ServerAlias entries to the SolarSage apache vhost so localhost,
-# pi5, and pi-ha etc. all serve SolarSage from the Pi's browser.
-#
-# Idempotent — safe to re-run.
+# Set the ServerAlias line in the SolarSage apache vhost to the
+# canonical list (so localhost / pi5 / pi-ha etc. all serve SolarSage
+# from the Pi's browser). Truly idempotent — safe to re-run from any
+# state.
 
 set -euo pipefail
 
 CONF="/etc/apache2/sites-available/solarsage.conf"
-NEW_ALIASES="ServerAlias pi-sf localhost pi5 pi5.hitorro.com pi-ha.hitorro.com"
+CANONICAL="    ServerAlias pi-sf localhost pi5 pi5.hitorro.com pi-ha.hitorro.com"
 
 if [[ ! -f "$CONF" ]]; then
   echo "not found: $CONF" >&2
   exit 1
 fi
 
-if grep -qF "$NEW_ALIASES" "$CONF"; then
-  echo "aliases already present — nothing to do"
+TMP="$(mktemp)"
+# awk replaces every line that starts with any indent + "ServerAlias pi-sf"
+# with the canonical alias line. Runs on the current file regardless of
+# what state it's already in — so re-running after a botched sed still
+# converges.
+awk -v repl="$CANONICAL" '
+  /^[[:space:]]*ServerAlias[[:space:]]+pi-sf([[:space:]]|$)/ {
+    print repl
+    next
+  }
+  { print }
+' "$CONF" > "$TMP"
+
+if diff -q "$CONF" "$TMP" >/dev/null 2>&1; then
+  echo "aliases already canonical — nothing to do"
+  rm -f "$TMP"
 else
-  # sed -i.bak keeps a backup at $CONF.bak the first time we touch it
-  sudo sed -i.bak "s|ServerAlias pi-sf$|    $NEW_ALIASES|" "$CONF"
-  # normalize the indent (sed replaces the whole line contents; the
-  # original had 4-space indent, keep it)
-  sudo sed -i "s|^    *    ServerAlias pi-sf localhost|    $NEW_ALIASES|g" "$CONF"
-  echo "updated $CONF"
+  sudo cp -a "$CONF" "$CONF.bak"
+  sudo mv "$TMP" "$CONF"
+  sudo chown root:root "$CONF"
+  sudo chmod 644 "$CONF"
+  echo "updated $CONF (backup at $CONF.bak)"
 fi
 
 echo "--- ServerAlias lines now ---"
 grep -n ServerAlias "$CONF"
 
 echo "--- configtest ---"
-sudo apache2ctl configtest 2>&1 | grep -v 'AH00558'
+sudo apache2ctl configtest 2>&1 | grep -v 'AH00558' || true
 
 echo "--- reload ---"
 sudo systemctl reload apache2
