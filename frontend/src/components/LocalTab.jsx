@@ -76,7 +76,7 @@ const RENDERERS = {
 
 // Stable order for subtabs when more than one is present.
 const TAB_ORDER = [
-  "Today", "Safety", "Outdoor", "Travel", "Solar", "Community", "Local",
+  "Today", "Safety", "Outdoor", "Travel", "Solar", "Community", "Lists", "Local",
 ];
 
 function tabSortKey(t) {

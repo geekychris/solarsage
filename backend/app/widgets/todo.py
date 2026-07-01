@@ -22,8 +22,8 @@ class TodoWidget(Widget):
         "SolarSage Lists workbook."
     )
     refresh_seconds = 6 * 3600
-    default_tab = "Community"
-    default_position = 205
+    default_tab = "Lists"
+    default_position = 30
 
     sheets_tab = "Todo"
     sheets_list_field = "items"

@@ -1,40 +1,29 @@
 """Baja California news — curated RSS feeds.
 
-Same parser as ``news.py``; ships with a Baja-focused default feed list
-so users don't have to hunt for RSS URLs. Users can add/remove via
-Settings.
+Same fetch pipeline as ``news.py``; ships with a Baja-focused default
+feed list. Inherits from NewsWidget so the auto-translate + caching
+logic comes for free — the tab renders through the same ``news`` kind.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
-
-import aiohttp
-
-from .base import Widget
-from .news import _parse_feed
+from .news import NewsWidget
 
 
-class BajaNewsWidget(Widget):
+class BajaNewsWidget(NewsWidget):
     id = "baja_news"
     kind = "news"          # reuses the news renderer
     name = "Baja news"
     description = (
         "Local Baja California headlines. Defaults to major regional "
-        "outlets — swap them via Settings for whichever feeds you follow."
+        "outlets — swap them via Settings for whichever feeds you follow. "
+        "Set ``auto_translate_to: en`` in config to see English "
+        "translations inline."
     )
     refresh_seconds = 30 * 60
     default_tab = "Community"
     default_position = 68
 
-    config_schema = {
-        "type": "object",
-        "properties": {
-            "feeds": {"type": "array"},
-            "max_items_per_feed": {"type": "integer"},
-        },
-    }
     default_config = {
         "feeds": [
             {"label": "Tribuna de San Luis",
@@ -56,43 +45,6 @@ class BajaNewsWidget(Widget):
              )},
         ],
         "max_items_per_feed": 5,
+        "source_lang": "es",
+        "auto_translate_to": "en",
     }
-
-    async def fetch(self, config: dict[str, Any]) -> dict[str, Any]:
-        feeds = config.get("feeds") or []
-        max_n = int(config.get("max_items_per_feed", 5))
-        results = []
-        async with aiohttp.ClientSession() as http:
-            for feed in feeds:
-                url = feed.get("url")
-                if not url:
-                    continue
-                try:
-                    async with http.get(
-                        url, timeout=20,
-                        headers={
-                            "User-Agent": (
-                                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                                "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-                                "Version/17.0 Safari/605.1.15"
-                            ),
-                            "Accept": "application/rss+xml, application/xml, */*",
-                        },
-                    ) as r:
-                        r.raise_for_status()
-                        body = await r.text()
-                    parsed = _parse_feed(body, url)
-                    parsed["label"] = feed.get("label") or parsed.get("title") or url
-                    parsed["items"] = parsed["items"][:max_n]
-                    results.append(parsed)
-                except Exception as exc:  # noqa: BLE001
-                    results.append({
-                        "source": url,
-                        "label": feed.get("label") or url,
-                        "error": str(exc),
-                        "items": [],
-                    })
-        return {
-            "fetched_at": datetime.now(timezone.utc).isoformat(),
-            "feeds": results,
-        }

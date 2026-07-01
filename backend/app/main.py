@@ -1922,6 +1922,14 @@ def _today_window_iso() -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
+def _day_window_iso(offset_days: int) -> tuple[str, str]:
+    now = datetime.now().astimezone()
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start += timedelta(days=offset_days)
+    end = start + timedelta(days=1)
+    return start.isoformat(), end.isoformat()
+
+
 def _reminders_from_payload(payload: list[dict[str, Any]]) -> list[ReminderRow]:
     out: list[ReminderRow] = []
     for item in payload or []:
@@ -1970,6 +1978,35 @@ async def list_events_today(_: Session | None = Depends(require_read)):
         starts_after=start, starts_before=end,
     )
     return {"date": start[:10], "events": [event_to_dict(e) for e in events]}
+
+
+@app.get(
+    "/api/events/upcoming",
+    tags=["events"],
+    summary="Today + next N days of events grouped by day",
+)
+async def list_events_upcoming(
+    days: int = Query(default=2, ge=1, le=14),
+    _: Session | None = Depends(require_read),
+):
+    """Returns events grouped by day: today, tomorrow, day-after, …
+    ``days`` controls how many days to include (default 2 = today + tomorrow)."""
+    start, _ignored = _day_window_iso(0)
+    _s, end = _day_window_iso(days - 1)
+    events = await event_store.list_events(
+        starts_after=start, starts_before=end,
+    )
+    # Group into buckets by local date
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for e in events:
+        d = e.starts_at[:10]
+        buckets.setdefault(d, []).append(event_to_dict(e))
+    days_out = []
+    for i in range(days):
+        d_start, _ = _day_window_iso(i)
+        d_key = d_start[:10]
+        days_out.append({"date": d_key, "events": buckets.get(d_key, [])})
+    return {"days": days_out}
 
 
 @app.post("/api/events", tags=["events"], summary="Create manual event")

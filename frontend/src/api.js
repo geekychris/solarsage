@@ -223,6 +223,7 @@ export const api = {
     }),
   // Events / reminders
   eventsToday: () => request("/api/events/today"),
+  eventsUpcoming: (days = 2) => request(`/api/events/upcoming?days=${days}`),
   listEvents: (params = {}) => {
     const p = new URLSearchParams();
     if (params.starts_after) p.set("starts_after", params.starts_after);

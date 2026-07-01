@@ -138,6 +138,51 @@ function EventRow({ event, onChanged }) {
   );
 }
 
+function prettyDate(iso) {
+  return new Date(iso + "T00:00:00").toLocaleDateString(undefined, {
+    weekday: "long", month: "short", day: "numeric",
+  });
+}
+
+function DaySection({ day, isToday, load }) {
+  const events = day.events || [];
+  const upcoming = isToday
+    ? events.filter((e) => new Date(e.starts_at) >= new Date())
+    : events;
+  const past = isToday
+    ? events.filter((e) => new Date(e.starts_at) < new Date())
+    : [];
+  const label = isToday ? "TODAY" : "TOMORROW";
+  return (
+    <div className="events-day">
+      <div className="events-day-head">
+        <span className="events-day-label">{label}</span>
+        <span className="muted" style={{ fontSize: 11 }}>
+          {prettyDate(day.date)} · {events.length} event{events.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      {events.length === 0 && (
+        <div className="muted" style={{ fontSize: 12 }}>
+          Nothing scheduled.
+        </div>
+      )}
+      {upcoming.length > 0 && upcoming.map((e) => (
+        <EventRow key={e.id} event={e} onChanged={load} />
+      ))}
+      {past.length > 0 && (
+        <details className="events-section" style={{ marginTop: 4 }}>
+          <summary className="muted" style={{ fontSize: 12 }}>
+            Earlier today ({past.length})
+          </summary>
+          {past.map((e) => (
+            <EventRow key={e.id} event={e} onChanged={load} />
+          ))}
+        </details>
+      )}
+    </div>
+  );
+}
+
 export default function EventsWidget() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
@@ -145,7 +190,7 @@ export default function EventsWidget() {
 
   const load = useCallback(async () => {
     try {
-      const r = await api.eventsToday();
+      const r = await api.eventsUpcoming(2);
       setData(r);
       setErr("");
     } catch (ex) {
@@ -171,43 +216,22 @@ export default function EventsWidget() {
 
   if (err) return <div className="error">{err}</div>;
   if (!data) return <div className="muted">Loading…</div>;
-  const events = data.events || [];
-  const upcoming = events.filter((e) => new Date(e.starts_at) >= new Date());
-  const past = events.filter((e) => new Date(e.starts_at) < new Date());
+  const days = data.days || [];
+  const totalEvents = days.reduce((n, d) => n + (d.events || []).length, 0);
+
   return (
     <div className="events-widget">
       <div className="events-head">
         <div className="muted" style={{ fontSize: 12 }}>
-          {data.date} · {events.length} event{events.length === 1 ? "" : "s"}
+          {totalEvents} event{totalEvents === 1 ? "" : "s"} across today + tomorrow
         </div>
         <button onClick={reingest} disabled={ingesting} title="Re-scan HOA PDF">
           {ingesting ? "…" : "Re-scan HOA"}
         </button>
       </div>
-      {events.length === 0 && (
-        <div className="muted">
-          No events scheduled for today. Re-scan HOA to pull from the
-          weekly PDF.
-        </div>
-      )}
-      {upcoming.length > 0 && (
-        <div className="events-section">
-          <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
-            UPCOMING
-          </div>
-          {upcoming.map((e) => (
-            <EventRow key={e.id} event={e} onChanged={load} />
-          ))}
-        </div>
-      )}
-      {past.length > 0 && (
-        <details className="events-section" style={{ marginTop: 8 }}>
-          <summary className="muted">Earlier today ({past.length})</summary>
-          {past.map((e) => (
-            <EventRow key={e.id} event={e} onChanged={load} />
-          ))}
-        </details>
-      )}
+      {days.map((d, i) => (
+        <DaySection key={d.date} day={d} isToday={i === 0} load={load} />
+      ))}
     </div>
   );
 }

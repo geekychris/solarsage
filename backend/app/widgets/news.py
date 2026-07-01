@@ -2,10 +2,18 @@
 
 Plain stdlib XML parser — no feedparser dep. Configure as many feed
 URLs as you like; the widget pulls the latest N items from each.
+
+Optional server-side auto-translation: set ``auto_translate_to`` in
+config (e.g. ``"en"``) and each item's title is translated once,
+cached in the translations table, and returned alongside the
+original. First fetch on a fresh feed hits MyMemory once per item;
+subsequent fetches serve every title from cache.
 """
 
 from __future__ import annotations
 
+import logging
+import os
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -15,6 +23,8 @@ from typing import Any
 import aiohttp
 
 from .base import Widget
+
+log = logging.getLogger("eg4.news")
 
 
 def _strip(s: str) -> str:
@@ -140,9 +150,13 @@ class NewsWidget(Widget):
              "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.atom"},
         ],
         "max_items_per_feed": 5,
+        "source_lang": "es",
+        "auto_translate_to": None,
     }
 
-    async def fetch(self, config: dict[str, Any]) -> dict[str, Any]:
+    async def _fetch_feeds(
+        self, config: dict[str, Any],
+    ) -> list[dict[str, Any]]:
         feeds = config.get("feeds") or []
         max_n = int(config.get("max_items_per_feed", 5))
         results = []
@@ -154,7 +168,14 @@ class NewsWidget(Widget):
                 try:
                     async with http.get(
                         url, timeout=20,
-                        headers={"User-Agent": "SolarSage/1.0 (news widget)"},
+                        headers={
+                            "User-Agent": (
+                                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                                "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+                                "Version/17.0 Safari/605.1.15"
+                            ),
+                            "Accept": "application/rss+xml, application/xml, */*",
+                        },
                     ) as r:
                         r.raise_for_status()
                         body = await r.text()
@@ -169,7 +190,38 @@ class NewsWidget(Widget):
                         "error": str(exc),
                         "items": [],
                     })
+        return results
+
+    async def _maybe_translate(
+        self,
+        feeds: list[dict[str, Any]],
+        source_lang: str,
+        target_lang: str | None,
+    ) -> None:
+        if not target_lang or target_lang == source_lang:
+            return
+        # Local import to avoid a cycle at module load time.
+        from ..translations import TranslationsStore
+        store = TranslationsStore(os.getenv("EG4_DB_PATH", "./eg4_history.db"))
+        for feed in feeds:
+            for item in feed.get("items") or []:
+                title = item.get("title") or ""
+                if not title.strip():
+                    continue
+                try:
+                    item["translated_title"] = await store.translate_cached(
+                        source_lang, target_lang, title,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    log.debug("translate failed for %r: %s", title[:40], exc)
+
+    async def fetch(self, config: dict[str, Any]) -> dict[str, Any]:
+        feeds = await self._fetch_feeds(config)
+        source_lang = str(config.get("source_lang") or "es")
+        target_lang = config.get("auto_translate_to")
+        await self._maybe_translate(feeds, source_lang, target_lang)
         return {
             "fetched_at": datetime.now(timezone.utc).isoformat(),
-            "feeds": results,
+            "feeds": feeds,
+            "auto_translated_to": target_lang,
         }

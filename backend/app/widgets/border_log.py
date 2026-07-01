@@ -23,8 +23,8 @@ class BorderLogWidget(Widget):
         "spotting patterns and for FMM / tax-residency records."
     )
     refresh_seconds = 24 * 3600
-    default_tab = "Travel"
-    default_position = 90
+    default_tab = "Lists"
+    default_position = 40
     sheets_tab = "Border Log"
     sheets_list_field = "crossings"
     sheets_field_order = ["date", "direction", "port", "wait_min", "purpose", "notes"]

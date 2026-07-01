@@ -23,8 +23,8 @@ class ContactsWidget(Widget):
         "the list from the card."
     )
     refresh_seconds = 24 * 3600
-    default_tab = "Community"
-    default_position = 200
+    default_tab = "Lists"
+    default_position = 10
     sheets_tab = "Contacts"
     sheets_list_field = "contacts"
     sheets_field_order = ["name", "phone", "email", "location", "tags", "notes"]

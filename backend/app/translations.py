@@ -87,6 +87,41 @@ class TranslationsStore:
             for r in rows
         ]
 
+    async def find(
+        self, source: str, target: str, source_text: str,
+    ) -> str | None:
+        """Cache lookup: return the target text if we've translated this
+        exact source text before, else None."""
+        db = await self._connect()
+        try:
+            cur = await db.execute(
+                "SELECT target_text FROM translations WHERE source=? "
+                "AND target=? AND source_text=? "
+                "ORDER BY ts DESC LIMIT 1",
+                (source, target, source_text),
+            )
+            row = await cur.fetchone()
+            return row[0] if row else None
+        finally:
+            await db.close()
+
+    async def translate_cached(
+        self, source: str, target: str, source_text: str,
+    ) -> str:
+        """Look up a translation in the cache, or call MyMemory + store.
+
+        Errors from MyMemory propagate — the caller decides whether to
+        keep the original text on failure.
+        """
+        hit = await self.find(source, target, source_text)
+        if hit is not None:
+            return hit
+        translated = await mymemory_translate(
+            source_text, source=source, target=target,
+        )
+        await self.add(source, target, source_text, translated)
+        return translated
+
     async def toggle_star(self, translation_id: int) -> None:
         db = await self._connect()
         try:

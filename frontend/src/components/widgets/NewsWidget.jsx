@@ -11,18 +11,23 @@ function prettyDate(s) {
 }
 
 function NewsItem({ item, defaultSource = "es" }) {
-  const [translated, setTranslated] = useState(null);
+  // Prefer the server-cached translation if present; the "translate"
+  // button then just toggles visibility. Falls back to on-demand
+  // MyMemory call when auto-translate isn't enabled for the widget.
+  const [translated, setTranslated] = useState(item.translated_title || null);
+  const [showTr, setShowTr] = useState(!!item.translated_title);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
   const doTranslate = useCallback(async (event) => {
     event.preventDefault();
-    if (translated) { setTranslated(null); return; }
+    if (translated) { setShowTr((v) => !v); return; }
     setBusy(true);
     setErr("");
     try {
       const r = await api.translate(item.title, defaultSource, "en");
       setTranslated(r.target_text);
+      setShowTr(true);
     } catch (ex) {
       setErr(ex.message || "translate failed");
     } finally {
@@ -35,7 +40,7 @@ function NewsItem({ item, defaultSource = "es" }) {
       <a href={item.link} target="_blank" rel="noreferrer" className="news-title-link">
         <div className="news-title">{item.title}</div>
       </a>
-      {translated && (
+      {translated && showTr && (
         <div className="news-translated">🌐 {translated}</div>
       )}
       <div className="news-item-foot">
@@ -48,9 +53,13 @@ function NewsItem({ item, defaultSource = "es" }) {
           onClick={doTranslate}
           disabled={busy}
           className="news-translate"
-          title={translated ? "Hide translation" : "Translate to English"}
+          title={
+            translated
+              ? (showTr ? "Hide translation" : "Show cached translation")
+              : "Translate to English"
+          }
         >
-          {busy ? "…" : translated ? "hide" : "🌐 EN"}
+          {busy ? "…" : (translated ? (showTr ? "hide" : "🌐 EN") : "🌐 EN")}
         </button>
       </div>
       {err && <div className="error-inline">{err}</div>}

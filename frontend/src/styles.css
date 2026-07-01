@@ -577,6 +577,18 @@ select, input {
 .events-widget { display: flex; flex-direction: column; gap: 8px; }
 .events-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .events-section { display: flex; flex-direction: column; gap: 6px; }
+.events-day {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px; margin-top: 6px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+  border-left: 3px solid var(--border, #2a2f37);
+}
+.events-day-head { display: flex; justify-content: space-between; align-items: baseline; }
+.events-day-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+  color: #6cd1ff;
+}
 .event-row {
   display: grid;
   grid-template-columns: 70px 1fr auto;

@@ -23,8 +23,8 @@ class QuickLinksWidget(Widget):
         "Settings to add your own."
     )
     refresh_seconds = 24 * 3600
-    default_tab = "Community"
-    default_position = 80
+    default_tab = "Lists"
+    default_position = 50
     sheets_tab = "Bookmarks"
     sheets_list_field = "links"
     sheets_field_order = ["label", "url", "group"]
