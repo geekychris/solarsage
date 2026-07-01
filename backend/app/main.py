@@ -59,6 +59,9 @@ from .widgets.community_newsletter import NewsletterWidget
 from .widgets.weather import WeatherWidget
 from .widgets.safety_aqi import AqiWidget
 from .widgets.quicklinks import QuickLinksWidget
+from .widgets.water_tank import WaterTankWidget
+from .widgets.sunset import SunsetWidget
+from .widgets.acpv_overlay import AcPvOverlayWidget
 from .widgets.property_mode import PropertyModeWidget
 from .widgets.news import NewsWidget
 from .widgets.reservations import ReservationsWidget
@@ -171,6 +174,9 @@ def _register_builtin_widgets() -> None:
         BajaRacesWidget(),
         ReservationsWidget(),
         QuickLinksWidget(),
+        WaterTankWidget(),
+        SunsetWidget(),
+        AcPvOverlayWidget(),
         PropertyTaxWidget(),
         ContactsWidget(),
         TodoWidget(),

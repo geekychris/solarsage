@@ -21,6 +21,21 @@ const SOURCE_META = {
     hint: "USGS quakes above a minimum magnitude within the widget's radius.",
     supportsMagnitude: true,
   },
+  battery_charged: {
+    label: "Battery charged",
+    hint: "Announce when the battery crosses a full-charge threshold.",
+    supportsSocThresholds: true,
+  },
+  excessive_discharge: {
+    label: "Excessive discharge",
+    hint: "Announce when the battery discharges above a kW threshold for a sustained window.",
+    supportsDischargeThresholds: true,
+  },
+  water_low: {
+    label: "Water tank low",
+    hint: "Announce when the tank crosses each configured percent-full threshold going down.",
+    supportsWaterThresholds: true,
+  },
 };
 
 const CHANNEL_OPTIONS = [
@@ -155,18 +170,103 @@ export default function NotificationsConfig() {
 
             {cfg.enabled && (
               <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-                <div className="field">
-                  <label>Warn (minutes before, comma-separated)</label>
-                  <input
-                    value={formatOffsets(cfg.warn_minutes_before)}
-                    onChange={(e) =>
-                      updateSource(src, {
-                        warn_minutes_before: parseOffsets(e.target.value),
-                      })
-                    }
-                    placeholder="120, 30"
-                  />
-                </div>
+                {!(meta.supportsSocThresholds
+                  || meta.supportsDischargeThresholds
+                  || meta.supportsWaterThresholds) && (
+                  <div className="field">
+                    <label>Warn (minutes before, comma-separated)</label>
+                    <input
+                      value={formatOffsets(cfg.warn_minutes_before)}
+                      onChange={(e) =>
+                        updateSource(src, {
+                          warn_minutes_before: parseOffsets(e.target.value),
+                        })
+                      }
+                      placeholder="120, 30"
+                    />
+                  </div>
+                )}
+                {meta.supportsSocThresholds && (
+                  <>
+                    <div className="field">
+                      <label>Announce at (SoC %)</label>
+                      <input
+                        type="number" min="1" max="100" step="1"
+                        value={cfg.threshold_soc ?? 98}
+                        onChange={(e) => updateSource(src, {
+                          threshold_soc: Number(e.target.value),
+                        })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Rearm below (SoC %)</label>
+                      <input
+                        type="number" min="0" max="100" step="1"
+                        value={cfg.rearm_below_soc ?? 85}
+                        onChange={(e) => updateSource(src, {
+                          rearm_below_soc: Number(e.target.value),
+                        })}
+                      />
+                      <span className="muted" style={{ fontSize: 11 }}>
+                        Prevents re-firing every minute — SoC has to drop
+                        this low before the "charged" alert re-arms.
+                      </span>
+                    </div>
+                  </>
+                )}
+                {meta.supportsDischargeThresholds && (
+                  <>
+                    <div className="field">
+                      <label>Announce when discharge exceeds (kW)</label>
+                      <input
+                        type="number" min="0" step="0.1"
+                        value={cfg.threshold_kw ?? 3.0}
+                        onChange={(e) => updateSource(src, {
+                          threshold_kw: Number(e.target.value),
+                        })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Rearm below (kW)</label>
+                      <input
+                        type="number" min="0" step="0.1"
+                        value={cfg.rearm_below_kw ?? 1.5}
+                        onChange={(e) => updateSource(src, {
+                          rearm_below_kw: Number(e.target.value),
+                        })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Must be sustained for (seconds)</label>
+                      <input
+                        type="number" min="0" step="10"
+                        value={cfg.min_sustained_seconds ?? 90}
+                        onChange={(e) => updateSource(src, {
+                          min_sustained_seconds: Number(e.target.value),
+                        })}
+                      />
+                      <span className="muted" style={{ fontSize: 11 }}>
+                        Avoids announcing a brief compressor kick.
+                      </span>
+                    </div>
+                  </>
+                )}
+                {meta.supportsWaterThresholds && (
+                  <div className="field">
+                    <label>Warn at (percent-full, comma-separated)</label>
+                    <input
+                      value={(cfg.warn_percents || []).join(", ")}
+                      onChange={(e) => updateSource(src, {
+                        warn_percents: parseOffsets(e.target.value),
+                      })}
+                      placeholder="50, 25, 10"
+                    />
+                    <span className="muted" style={{ fontSize: 11 }}>
+                      Each threshold fires once when crossed going down,
+                      re-arms 5% above.
+                    </span>
+                  </div>
+                )}
                 <div className="field">
                   <label>Channels</label>
                   <div style={{ display: "flex", gap: 12 }}>

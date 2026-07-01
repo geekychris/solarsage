@@ -189,6 +189,13 @@ async def _ingest_announcements(
         log.info("announcements ingest: %s", counts)
 
 
+async def _run_state_checks(widget_store: Any) -> None:
+    saved = await widget_store.get_config(announcements_mod.CONFIG_ID) or {}
+    counts = await announcements_mod.run_state_checks(widget_store, saved)
+    if any(counts.values()):
+        log.info("state announcements fired: %s", counts)
+
+
 async def run_reminder_scheduler(
     store: EventStore, widget_store: Any,
 ) -> None:
@@ -204,6 +211,9 @@ async def run_reminder_scheduler(
                 await _ingest_announcements(store, widget_store)
                 last_ingest = now
             await _fire_due_reminders(store)
+            # State-based announcements — cheap; run every tick so a
+            # sudden discharge / low water triggers quickly.
+            await _run_state_checks(widget_store)
         except asyncio.CancelledError:
             return
         except Exception:  # noqa: BLE001

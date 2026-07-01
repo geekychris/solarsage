@@ -37,6 +37,9 @@ import ConsumptionYoYWidget from "./widgets/ConsumptionYoYWidget.jsx";
 import TodoWidget from "./widgets/TodoWidget.jsx";
 import SubscriptionsWidget from "./widgets/SubscriptionsWidget.jsx";
 import SolarVitalsWidget from "./widgets/SolarVitalsWidget.jsx";
+import WaterTankWidget from "./widgets/WaterTankWidget.jsx";
+import SunsetWidget from "./widgets/SunsetWidget.jsx";
+import AcPvOverlayWidget from "./widgets/AcPvOverlayWidget.jsx";
 import WidgetSettings from "./WidgetSettings.jsx";
 
 const RENDERERS = {
@@ -75,6 +78,9 @@ const RENDERERS = {
   consumption_yoy: ConsumptionYoYWidget,
   todo: TodoWidget,
   solar_vitals: SolarVitalsWidget,
+  water_tank: WaterTankWidget,
+  sunset: SunsetWidget,
+  acpv_overlay: AcPvOverlayWidget,
 };
 
 // Stable order for subtabs when more than one is present.

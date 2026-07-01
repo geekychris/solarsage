@@ -1630,6 +1630,54 @@ select, input {
 .sv-smart-ac-name { font-weight: 600; }
 .sv-smart-ac-watts { font-size: 12px; margin-top: 2px; }
 .sv-smart-ac-rated { font-size: 10px; opacity: 0.7; margin-top: 1px; }
+
+/* Water tank */
+.water-tank-top {
+  display: flex; gap: 16px; align-items: center; margin-bottom: 8px;
+}
+.water-tank-big { font-size: 44px; font-weight: 800; line-height: 1; }
+.water-tank-sub { flex: 1; font-size: 13px; }
+.water-tank-bar-outer {
+  position: relative; height: 12px; border-radius: 6px;
+  background: rgba(255,255,255,0.06); overflow: hidden;
+}
+.water-tank-bar-inner {
+  height: 100%; border-radius: 6px; transition: width 0.4s;
+}
+.water-tank-tick {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: rgba(255,255,255,0.35);
+}
+
+/* Sunset countdown */
+.sunset-headline {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 0; border-radius: 8px;
+  border: 1px solid transparent;
+}
+.sunset-headline.golden {
+  background: linear-gradient(180deg, rgba(255,209,102,0.15), rgba(255,155,108,0.05));
+  border-color: rgba(255,209,102,0.35);
+}
+.sunset-headline.dusk {
+  background: linear-gradient(180deg, rgba(197,74,140,0.15), rgba(162,155,254,0.05));
+  border-color: rgba(197,74,140,0.35);
+}
+.sunset-label { font-size: 11px; opacity: 0.7; }
+.sunset-big { font-size: 36px; font-weight: 800; line-height: 1.1; }
+.sunset-target-clock { font-size: 11px; }
+.sunset-row {
+  display: flex; gap: 12px; margin-top: 8px; justify-content: space-around;
+  flex-wrap: wrap;
+}
+
+/* AC vs PV overlay */
+.acpv-legend { display: flex; gap: 12px; align-items: center; font-size: 12px; margin-bottom: 4px; }
+.acpv-leg { display: inline-flex; align-items: center; gap: 4px; }
+.acpv-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.acpv-legend-note { margin-left: auto; font-size: 11px; }
+.acpv-svg { display: block; }
+.acpv-tip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .sv-appliance {
   display: grid; grid-template-columns: 1fr auto; gap: 3px;
   padding: 6px 8px; font-size: 12px; text-align: left;
