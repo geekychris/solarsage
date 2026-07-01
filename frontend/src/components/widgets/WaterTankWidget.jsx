@@ -32,15 +32,23 @@ export default function WaterTankWidget({ data }) {
           {p != null ? `${p.toFixed(0)}%` : "—"}
         </div>
         <div className="water-tank-sub">
-          <div>
-            <strong>{data.depth_ft?.toFixed(2)} ft</strong>
-            <span className="muted"> of {data.full_ft?.toFixed(1)} ft</span>
-          </div>
-          {data.gallons != null && (
-            <div className="muted">
-              ~{data.gallons.toLocaleString()} gal remaining
+          {data.gallons != null ? (
+            <div>
+              <strong>~{data.gallons.toLocaleString()} gal</strong>
+              {data.capacity_gal != null && (
+                <span className="muted"> of ~{data.capacity_gal.toLocaleString()} gal</span>
+              )}
+            </div>
+          ) : (
+            <div>
+              <strong>{data.depth_ft?.toFixed(2)} ft</strong>
+              <span className="muted"> of {data.full_ft?.toFixed(1)} ft</span>
             </div>
           )}
+          <div className="muted" style={{ fontSize: 11 }}>
+            {data.depth_ft?.toFixed(2)} ft depth
+            {data.gallons_per_ft && ` · ${data.gallons_per_ft} gal/ft`}
+          </div>
           {days && (
             <div className="muted">
               ~{days} to empty at current usage
@@ -49,6 +57,7 @@ export default function WaterTankWidget({ data }) {
           {data.rate_ft_per_day != null && (
             <div className="muted" style={{ fontSize: 11 }}>
               rate: {(data.rate_ft_per_day * 12).toFixed(2)} in/day
+              {data.gal_per_day != null && ` · ~${data.gal_per_day} gal/day`}
             </div>
           )}
         </div>

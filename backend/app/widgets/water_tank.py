@@ -99,8 +99,11 @@ class WaterTankWidget(Widget):
         "ha_entity_id_max_7d":  "sensor.front_of_house_water_depth_sensor_water_depth_max_7d",
         "full_ft":  6.0,
         "empty_ft": 0.0,
-        # Nominal capacity in US gallons — used when ``capacity_gal>0``
-        # to translate percent into gallons remaining. Leave 0 to skip.
+        # Tank geometry: 357 US gallons per foot of depth is what the HA
+        # /water command uses for the SF cistern. Overrides capacity_gal
+        # when set — we derive capacity + current gallons from geometry.
+        "gallons_per_ft": 357,
+        # Legacy: static capacity_gal. Ignored when gallons_per_ft>0.
         "capacity_gal": 0,
     }
 
@@ -137,13 +140,20 @@ class WaterTankWidget(Widget):
         if span > 0:
             percent = max(0.0, min(100.0, (depth - empty_ft) / span * 100))
 
+        gal_per_ft = float(config.get("gallons_per_ft") or 0)
         gallons = None
-        if percent is not None and capacity_gal > 0:
+        capacity_gal_out = None
+        if gal_per_ft > 0:
+            capacity_gal_out = round(gal_per_ft * span)
+            gallons = round(gal_per_ft * max(0.0, depth - empty_ft))
+        elif percent is not None and capacity_gal > 0:
+            capacity_gal_out = capacity_gal
             gallons = round(capacity_gal * percent / 100)
 
         # Days-remaining projection: use 7-day max as recent full-mark.
         # Rate = (max_7d - current) / 7 days, in ft/day.
         rate_ft_per_day = None
+        gal_per_day = None
         days_remaining = None
         if max_7d is not None and max_7d > depth and empty_ft is not None:
             drop = max_7d - depth
@@ -151,6 +161,8 @@ class WaterTankWidget(Widget):
             # Time to reach empty_ft at current rate
             if rate_ft_per_day > 0:
                 days_remaining = round((depth - empty_ft) / rate_ft_per_day, 1)
+                if gal_per_ft > 0:
+                    gal_per_day = round(rate_ft_per_day * gal_per_ft)
 
         return {
             "fetched_at": datetime.now(timezone.utc).isoformat(),
@@ -160,9 +172,11 @@ class WaterTankWidget(Widget):
             "empty_ft": empty_ft,
             "percent": None if percent is None else round(percent, 1),
             "gallons": gallons,
-            "capacity_gal": capacity_gal or None,
+            "capacity_gal": capacity_gal_out,
+            "gallons_per_ft": gal_per_ft or None,
             "days_remaining": days_remaining,
             "rate_ft_per_day": rate_ft_per_day,
+            "gal_per_day": gal_per_day,
             "trend": {
                 "max_24h_ft": None if max_24h is None else round(max_24h, 2),
                 "max_3d_ft":  None,   # not fetched (HA has it but rarely needed)
