@@ -1,7 +1,7 @@
 import React from "react";
 
 function Staleness({ meta }) {
-  if (!meta) return <span className="muted">no timestamp</span>;
+  if (!meta) return <span className="muted" style={{ fontSize: 11 }}>no timestamp</span>;
   const cls = meta.stale ? "fuel-stale" : "muted";
   return (
     <span className={cls} style={{ fontSize: 11 }}>
@@ -14,7 +14,9 @@ export default function CostcoFuelWidget({ data }) {
   if (!data) return <div className="muted">Loading…</div>;
   const ca = data.ca_avg_usd_gal;
   const cs = data.costco_calexico_usd_gal;
-  const px = data.pemex_sf_usd_gal_equiv;
+  const pxUsd = data.pemex_usd_gal_equiv;
+  const pxRegMxn = data.pemex_regular_mxn_l;
+  const stations = data.pemex_stations || [];
   const delta = data.savings_usd_gal_going_north;
 
   return (
@@ -32,6 +34,60 @@ export default function CostcoFuelWidget({ data }) {
         </div>
       </div>
 
+      {/* Real: Pemex nearest */}
+      <div className="fuel-source fuel-real">
+        <div className="fuel-source-head">
+          <span className="fuel-source-name">Pemex — nearest</span>
+          <span className="muted fuel-source-tag">CRE gov feed · live</span>
+        </div>
+        {data.pemex_nearest ? (
+          <>
+            <div className="fuel-big">
+              {pxRegMxn?.toFixed(2)} MXN/L
+              {pxUsd != null && (
+                <span className="muted" style={{ fontSize: 11, marginLeft: 8 }}>
+                  ≈ ${pxUsd.toFixed(2)}/gal
+                  {data.usd_per_mxn && ` @ ${data.usd_per_mxn.toFixed(4)} MXN/USD`}
+                </span>
+              )}
+            </div>
+            <div className="muted" style={{ fontSize: 11 }}>
+              {data.pemex_nearest.name.slice(0, 40)} — {data.pemex_nearest.distance_km} km
+            </div>
+          </>
+        ) : (
+          <div className="muted">
+            {data.pemex_error || "no station found within radius"}
+          </div>
+        )}
+      </div>
+
+      {stations.length > 1 && (
+        <details className="fuel-details">
+          <summary className="muted" style={{ fontSize: 11, cursor: "pointer" }}>
+            {stations.length} stations within {stations[0] ? "radius" : ""}
+          </summary>
+          <table className="fuel-stations">
+            <thead>
+              <tr>
+                <th>Station</th><th>km</th><th>reg</th><th>prem</th><th>diesel</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stations.map((s) => (
+                <tr key={s.place_id}>
+                  <td>{s.name.slice(0, 34)}</td>
+                  <td>{s.distance_km}</td>
+                  <td>{s.regular_mxn_l ?? "—"}</td>
+                  <td>{s.premium_mxn_l ?? "—"}</td>
+                  <td>{s.diesel_mxn_l  ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
+
       {/* Costco Calexico — manual */}
       <div className="fuel-source">
         <div className="fuel-source-head">
@@ -40,24 +96,6 @@ export default function CostcoFuelWidget({ data }) {
         </div>
         <div className="fuel-big">
           {cs != null ? `$${cs.toFixed(2)}/gal` : "—"}
-        </div>
-      </div>
-
-      {/* Pemex SF — manual */}
-      <div className="fuel-source">
-        <div className="fuel-source-head">
-          <span className="fuel-source-name">Pemex San Felipe</span>
-          <Staleness meta={data.pemex_staleness} />
-        </div>
-        <div className="fuel-big">
-          {px != null ? `$${px.toFixed(2)}/gal` : "—"}
-          {data.pemex_sf_mxn_liter != null && (
-            <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>
-              ({data.pemex_sf_mxn_liter} MXN/L
-              {data.usd_per_mxn ? ` · ${data.usd_per_mxn.toFixed(4)} MXN/USD` : ""}
-              )
-            </span>
-          )}
         </div>
       </div>
 

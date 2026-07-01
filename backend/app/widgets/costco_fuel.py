@@ -21,9 +21,11 @@ hasn't been touched in >14 days.
 
 from __future__ import annotations
 
+import math
 import os
 import re
 import time as _time
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Any
 
@@ -38,6 +40,85 @@ GASBUDDY_SEARCH = (
 
 EIA_URL = "https://api.eia.gov/v2/petroleum/pri/gnd/data/"
 STALE_DAYS = 14
+
+# Mexican gov (CRE) public gas-price feeds — served from Azure, reachable
+# from the pi's LAN. Refreshed several times a day.
+CRE_PLACES_URL = "https://publicacionexterna.azurewebsites.net/publicaciones/places"
+CRE_PRICES_URL = "https://publicacionexterna.azurewebsites.net/publicaciones/prices"
+
+
+def _km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Cheap flat-earth distance, good enough for a 30 km radius."""
+    return math.hypot((lat1 - lat2) * 111, (lon1 - lon2) * 95)
+
+
+async def _fetch_pemex_near(
+    lat: float, lon: float, radius_km: float, max_stations: int,
+) -> tuple[list[dict], str | None]:
+    """Return (stations, error). Each station has name, distance_km,
+    lat, lon, regular_mxn_l, premium_mxn_l, diesel_mxn_l."""
+    try:
+        async with aiohttp.ClientSession() as http:
+            async with http.get(CRE_PLACES_URL, timeout=30) as r:
+                if r.status >= 400:
+                    return [], f"places HTTP {r.status}"
+                places_xml = await r.text()
+            async with http.get(CRE_PRICES_URL, timeout=30) as r:
+                if r.status >= 400:
+                    return [], f"prices HTTP {r.status}"
+                prices_xml = await r.text()
+    except Exception as exc:  # noqa: BLE001
+        return [], f"{exc.__class__.__name__}: {exc}"
+
+    try:
+        places_root = ET.fromstring(places_xml)
+        prices_root = ET.fromstring(prices_xml)
+    except ET.ParseError as exc:
+        return [], f"parse: {exc}"
+
+    nearby: dict[str, dict[str, Any]] = {}
+    for p in places_root:
+        pid = p.get("place_id")
+        if not pid:
+            continue
+        loc = p.find("location")
+        if loc is None:
+            continue
+        try:
+            x = float(loc.findtext("x") or 0)  # lon
+            y = float(loc.findtext("y") or 0)  # lat
+        except ValueError:
+            continue
+        d = _km(lat, lon, y, x)
+        if d <= radius_km:
+            nearby[pid] = {
+                "place_id": pid,
+                "name": p.findtext("name") or "?",
+                "distance_km": round(d, 1),
+                "lat": y, "lon": x,
+                "regular_mxn_l": None,
+                "premium_mxn_l": None,
+                "diesel_mxn_l": None,
+            }
+
+    for p in prices_root:
+        pid = p.get("place_id")
+        if pid not in nearby:
+            continue
+        for gp in p.findall("gas_price"):
+            try:
+                v = float(gp.text or 0) or None
+            except (ValueError, TypeError):
+                v = None
+            if gp.get("type") == "regular":
+                nearby[pid]["regular_mxn_l"] = v
+            elif gp.get("type") == "premium":
+                nearby[pid]["premium_mxn_l"] = v
+            elif gp.get("type") == "diesel":
+                nearby[pid]["diesel_mxn_l"] = v
+
+    stations = sorted(nearby.values(), key=lambda s: s["distance_km"])
+    return stations[:max_stations], None
 
 
 async def _fetch_eia_california_regular(api_key: str) -> tuple[float | None, str | None]:
@@ -137,42 +218,35 @@ class CostcoFuelWidget(Widget):
     config_schema = {
         "type": "object",
         "properties": {
+            "lat":                    {"type": "number"},
+            "lon":                    {"type": "number"},
+            "pemex_radius_km":        {"type": "number"},
+            "pemex_max_stations":     {"type": "integer"},
             "costco_manual_usd_gal": {"type": ["number", "null"]},
             "costco_updated_at":     {"type": ["string", "null"]},
-            "pemex_manual_mxn_liter": {"type": ["number", "null"]},
-            "pemex_updated_at":       {"type": ["string", "null"]},
             "usd_per_mxn":            {"type": ["number", "null"]},
             "eia_api_key":            {"type": ["string", "null"],
                                         "description": "Free key from eia.gov/opendata — falls back to DEMO_KEY"},
             "try_costco_scrape":      {"type": "boolean"},
-            "history": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "date": {"type": "string", "format": "date"},
-                        "costco_usd_gal": {"type": "number"},
-                        "pemex_mxn_liter": {"type": "number"},
-                    },
-                },
-            },
         },
     }
     default_config = {
+        "lat": 31.025,
+        "lon": -114.838,
+        "pemex_radius_km": 30,
+        "pemex_max_stations": 6,
         "costco_manual_usd_gal": None,
         "costco_updated_at": None,
-        "pemex_manual_mxn_liter": None,
-        "pemex_updated_at": None,
         "usd_per_mxn": None,
         "eia_api_key": None,
         "try_costco_scrape": False,
-        "history": [],
     }
 
     async def fetch(self, config: dict[str, Any]) -> dict[str, Any]:
         costco_manual = config.get("costco_manual_usd_gal")
-        pemex_manual = config.get("pemex_manual_mxn_liter")
         rate = config.get("usd_per_mxn")
+        lat = float(config.get("lat", 31.025))
+        lon = float(config.get("lon", -114.838))
 
         # Real: EIA California retail weekly average
         eia_key = (
@@ -182,7 +256,27 @@ class CostcoFuelWidget(Widget):
         )
         ca_avg_usd_gal, ca_avg_date = await _fetch_eia_california_regular(eia_key)
 
-        # Best effort scrape (usually fails — disabled by default)
+        # Real: Pemex live per-station prices from Mexican gov feed
+        pemex_stations, pemex_err = await _fetch_pemex_near(
+            lat, lon,
+            float(config.get("pemex_radius_km", 30)),
+            int(config.get("pemex_max_stations", 6)),
+        )
+        # Nearest station's regular price is our "Pemex SF" headline
+        pemex_regular_mxn_l = None
+        pemex_nearest = None
+        for s in pemex_stations:
+            if s.get("regular_mxn_l"):
+                pemex_regular_mxn_l = s["regular_mxn_l"]
+                pemex_nearest = s
+                break
+
+        pemex_usd_gal = None
+        if pemex_regular_mxn_l and rate:
+            # 1 US gallon = 3.78541 L
+            pemex_usd_gal = round(pemex_regular_mxn_l * float(rate) * 3.78541, 2)
+
+        # Best effort Costco scrape (usually fails — disabled by default)
         scraped, costco_source = (None, "manual")
         if config.get("try_costco_scrape"):
             scraped, costco_source = await _scrape_costco_calexico(
@@ -191,11 +285,6 @@ class CostcoFuelWidget(Widget):
         costco_val = scraped if scraped is not None else (
             float(costco_manual) if costco_manual is not None else None
         )
-
-        pemex_usd_gal = None
-        if pemex_manual and rate:
-            # 1 US gallon = 3.78541 L
-            pemex_usd_gal = float(pemex_manual) * float(rate) * 3.78541
 
         delta = None
         if costco_val is not None and pemex_usd_gal is not None:
@@ -211,16 +300,17 @@ class CostcoFuelWidget(Widget):
             "costco_calexico_usd_gal": costco_val,
             "costco_source": costco_source,
             "costco_staleness": _staleness(config.get("costco_updated_at")),
-            "pemex_sf_mxn_liter": pemex_manual,
-            "pemex_sf_usd_gal_equiv":
-                round(pemex_usd_gal, 2) if pemex_usd_gal else None,
-            "pemex_staleness": _staleness(config.get("pemex_updated_at")),
+            "pemex_stations": pemex_stations,
+            "pemex_nearest": pemex_nearest,
+            "pemex_regular_mxn_l": pemex_regular_mxn_l,
+            "pemex_usd_gal_equiv": pemex_usd_gal,
+            "pemex_source": ("cre.gob.mx" if pemex_stations else "unavailable"),
+            "pemex_error": pemex_err,
             "usd_per_mxn": rate,
             "savings_usd_gal_going_north": delta,
-            "history": config.get("history") or [],
             "sources": {
                 "ca_avg": "US EIA API v2 — California retail weekly regular",
-                "costco": "Manual (Costco / GasBuddy don't serve prices to scrapers)",
-                "pemex":  "Manual (Mexican gov APIs blocked from this network)",
+                "pemex":  "CRE (Mexican gov) publicacionexterna feed — live per-station",
+                "costco": "Manual (Costco/GasBuddy don't serve prices to scrapers)",
             },
         }

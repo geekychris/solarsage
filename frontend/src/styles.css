@@ -1304,6 +1304,15 @@ select, input {
 .fuel-source-name { font-weight: 600; }
 .fuel-source-tag { font-size: 10px; }
 .fuel-stale { color: #ffd166; font-weight: 600; }
+.fuel-details { margin-top: -4px; }
+.fuel-stations {
+  width: 100%; font-size: 11px; border-collapse: collapse; margin-top: 4px;
+}
+.fuel-stations th, .fuel-stations td {
+  text-align: left; padding: 3px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.fuel-stations th { font-weight: 600; color: var(--muted, #888); }
 
 /* Consumption YoY */
 .yoy { display: flex; flex-direction: column; gap: 6px; }
