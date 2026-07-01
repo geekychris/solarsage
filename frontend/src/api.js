@@ -282,4 +282,8 @@ export const api = {
     request(`/api/subscriptions/${encodeURIComponent(id)}`, { method: "DELETE" }),
   testSubscription: (id) =>
     request(`/api/subscriptions/${encodeURIComponent(id)}/test`, { method: "POST" }),
+  // Rotation mode
+  getRotation: () => request("/api/rotation"),
+  putRotation: (config) =>
+    request("/api/rotation", { method: "PUT", body: config }),
 };

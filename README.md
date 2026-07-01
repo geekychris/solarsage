@@ -58,6 +58,7 @@ works inside.
 | **Threshold subscriptions** | Declarative "if X then TTS + Telegram" rules per widget. Edge-triggered, cooldown-limited, per-rule test button. |
 | **MQTT + Home Assistant discovery** | Every widget publishes to your MQTT broker with an HA discovery config — sensors appear in Home Assistant automatically. |
 | **Mobile / touch view** | Single-column stream + bottom tab bar + 48-px targets. Auto-detects touch devices; add to iOS home screen for a PWA-lite. |
+| **Fullscreen rotation mode** | "Screensaver" cycler that walks through selected widgets full-screen with per-step dwell times. Includes a purpose-built **Solar vitals** widget (SoC, PV, load, time-to-full/empty, cut-back projection). |
 
 ## Documentation
 
@@ -69,6 +70,7 @@ works inside.
 * [`docs/NOTIFICATIONS.md`](docs/NOTIFICATIONS.md) — subscriptions, channels, HA notify wiring
 * [`docs/MQTT.md`](docs/MQTT.md) — MQTT publish + HA MQTT discovery
 * [`docs/MOBILE.md`](docs/MOBILE.md) — mobile / touch layout + add-to-home-screen
+* [`docs/ROTATION.md`](docs/ROTATION.md) — fullscreen rotation player + Solar vitals widget
 * [`docs/API.md`](docs/API.md) — REST + MCP reference (auto-generated OpenAPI at `/docs`)
 
 ## UI walkthrough

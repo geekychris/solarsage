@@ -36,6 +36,8 @@ import CostcoFuelWidget from "./widgets/CostcoFuelWidget.jsx";
 import ConsumptionYoYWidget from "./widgets/ConsumptionYoYWidget.jsx";
 import TodoWidget from "./widgets/TodoWidget.jsx";
 import SubscriptionsWidget from "./widgets/SubscriptionsWidget.jsx";
+import RotationConfigWidget from "./widgets/RotationConfigWidget.jsx";
+import SolarVitalsWidget from "./widgets/SolarVitalsWidget.jsx";
 import WidgetSettings from "./WidgetSettings.jsx";
 
 const RENDERERS = {
@@ -73,6 +75,7 @@ const RENDERERS = {
   costco_fuel: CostcoFuelWidget,
   consumption_yoy: ConsumptionYoYWidget,
   todo: TodoWidget,
+  solar_vitals: SolarVitalsWidget,
 };
 
 // Stable order for subtabs when more than one is present.
@@ -231,6 +234,17 @@ export default function LocalTab({ tzOffsetMinutes }) {
         layout: { tab: "Lists", position: 5 },
         fetched_at: null, error: null, data: null,
       },
+      {
+        id: "_rotation",
+        meta: {
+          kind: "_rotation",
+          name: "Rotation (screensaver)",
+          description:
+            "Fullscreen cycler that walks through selected widgets with per-step dwell times. Same widget can appear multiple times to weight visibility.",
+        },
+        layout: { tab: "Lists", position: 8 },
+        fetched_at: null, error: null, data: null,
+      },
     ];
     return [...virtual, ...widgets];
   }, [widgets]);
@@ -313,8 +327,10 @@ export default function LocalTab({ tzOffsetMinutes }) {
       </div>
       <div className="local-grid">
         {widgetsInTab.map((w) => {
-          if (w.id === "_events" || w.id === "_subscriptions") {
-            const Inner = w.id === "_events" ? EventsWidget : SubscriptionsWidget;
+          if (w.id === "_events" || w.id === "_subscriptions" || w.id === "_rotation") {
+            const Inner = w.id === "_events" ? EventsWidget
+                       : w.id === "_rotation" ? RotationConfigWidget
+                       : SubscriptionsWidget;
             return (
               <div key={w.id} className="panel widget-card">
                 <div className="widget-head">

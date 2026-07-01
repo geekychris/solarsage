@@ -2,16 +2,21 @@ import React, { useEffect, useState } from "react";
 import Login from "./components/Login.jsx";
 import Dashboard from "./components/Dashboard.jsx";
 import MobileApp from "./components/MobileApp.jsx";
+import RotationMode from "./components/RotationMode.jsx";
 import { api, getToken, setToken } from "./api.js";
 
 const MOBILE_KEY = "eg4.mobile";
 
+function urlViewParam() {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("view");
+}
+
 function resolveInitialMobile() {
   if (typeof window === "undefined") return false;
-  const params = new URLSearchParams(window.location.search);
-  const q = params.get("view");
+  const q = urlViewParam();
   if (q === "mobile") return true;
-  if (q === "desktop") return false;
+  if (q === "desktop" || q === "rotation") return false;
   const stored = localStorage.getItem(MOBILE_KEY);
   if (stored === "1") return true;
   if (stored === "0") return false;
@@ -25,6 +30,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [bootChecked, setBootChecked] = useState(false);
   const [mobile, setMobile] = useState(() => resolveInitialMobile());
+  const [rotation, setRotation] = useState(() => urlViewParam() === "rotation");
 
   const switchToMobile = () => {
     setMobile(true);
@@ -33,6 +39,16 @@ export default function App() {
   const switchToDesktop = () => {
     setMobile(false);
     localStorage.setItem(MOBILE_KEY, "0");
+  };
+  const enterRotation = () => setRotation(true);
+  const exitRotation = () => {
+    setRotation(false);
+    // Strip ?view=rotation so navigating back doesn't re-trigger it
+    if (typeof window !== "undefined" && urlViewParam() === "rotation") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("view");
+      window.history.replaceState({}, "", url.toString());
+    }
   };
 
   useEffect(() => {
@@ -74,12 +90,16 @@ export default function App() {
   if (!session) {
     return <Login onLoggedIn={(s) => setSession(s)} />;
   }
+  if (rotation) {
+    return <RotationMode onExit={exitRotation} />;
+  }
   if (mobile) {
     return (
       <MobileApp
         session={session}
         onLoggedOut={() => setSession(null)}
         onExitMobile={switchToDesktop}
+        onEnterRotation={enterRotation}
       />
     );
   }
@@ -88,6 +108,7 @@ export default function App() {
       session={session}
       onLoggedOut={() => setSession(null)}
       onSwitchMobile={switchToMobile}
+      onEnterRotation={enterRotation}
     />
   );
 }

@@ -76,6 +76,7 @@ from .widgets.border_log import BorderLogWidget
 from .widgets.spanish import SpanishWidget
 from .widgets.costco_fuel import CostcoFuelWidget
 from .widgets.consumption_yoy import ConsumptionYoYWidget
+from .widgets.solar_vitals import SolarVitalsWidget
 from .translations import TranslationsStore, mymemory_translate
 from .widgets.todo import TodoWidget
 from .sheets import SheetsSync, load_sheets_from_env
@@ -159,6 +160,7 @@ def _register_builtin_widgets() -> None:
         ShoppingListWidget(),
         # Solar synergy
         PropertyModeWidget(),
+        SolarVitalsWidget(),
         SolarExcessWidget(),
         PrecoolWidget(),
         ConsumptionYoYWidget(),
@@ -2297,6 +2299,66 @@ async def post_news_translate(
 # Rules stored in the subscriptions table are evaluated after every
 # widget refresh; edge-triggered (false → true) on a per-rule cooldown.
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Rotation mode — fullscreen "screensaver" that cycles through widgets.
+# Config stored as a JSON blob in widget_config under the special id
+# ``_rotation``. Sequence entries are ordered; each has a widget_id and
+# a per-item dwell_seconds so the user can weight what shows more
+# (e.g. Solar every-other slot by adding it multiple times).
+# ---------------------------------------------------------------------------
+
+_ROTATION_ID = "_rotation"
+_ROTATION_DEFAULT = {
+    "enabled": False,
+    "default_dwell_seconds": 20,
+    "sequence": [
+        {"widget_id": "solar_vitals", "dwell_seconds": 25},
+        {"widget_id": "aqi",          "dwell_seconds": 15},
+        {"widget_id": "solar_vitals", "dwell_seconds": 25},
+        {"widget_id": "weather",      "dwell_seconds": 15},
+        {"widget_id": "solar_vitals", "dwell_seconds": 25},
+        {"widget_id": "tides",        "dwell_seconds": 20},
+        {"widget_id": "solar_vitals", "dwell_seconds": 25},
+        {"widget_id": "hoa",          "dwell_seconds": 15},
+    ],
+}
+
+
+@app.get(
+    "/api/rotation",
+    tags=["rotation"],
+    summary="Get rotation-mode config",
+)
+async def get_rotation(_: Session | None = Depends(require_read)):
+    cur = await widget_store.get_config(_ROTATION_ID) or dict(_ROTATION_DEFAULT)
+    return {"config": cur, "default": _ROTATION_DEFAULT}
+
+
+@app.put(
+    "/api/rotation",
+    tags=["rotation"],
+    summary="Save rotation-mode config",
+)
+async def put_rotation(
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Body: ``{enabled: bool, default_dwell_seconds: int,
+    sequence: [{widget_id, dwell_seconds}]}``."""
+    # Minimal validation — non-empty sequence, each item has a widget_id
+    seq = body.get("sequence") or []
+    if not isinstance(seq, list):
+        raise HTTPException(status_code=400, detail="sequence must be a list")
+    for i, item in enumerate(seq):
+        if not isinstance(item, dict) or not item.get("widget_id"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"sequence[{i}] must be an object with widget_id",
+            )
+    await widget_store.put_config(_ROTATION_ID, body)
+    return {"config": body}
 
 
 @app.post(

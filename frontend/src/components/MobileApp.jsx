@@ -101,7 +101,7 @@ function MobileCard({ widget, tzOffsetMinutes, onRefreshed }) {
   );
 }
 
-export default function MobileApp({ session, onLoggedOut, onExitMobile }) {
+export default function MobileApp({ session, onLoggedOut, onExitMobile, onEnterRotation }) {
   const [widgets, setWidgets] = useState(null);
   const [tzOffsetMinutes, setTzOffsetMinutes] = useState(null);
   const [activeTab, setActiveTab] = useState(null);
@@ -166,9 +166,16 @@ export default function MobileApp({ session, onLoggedOut, onExitMobile }) {
       <header className="m-header">
         <span className="m-brand">SolarSage</span>
         <span className="m-tab-label">{active}</span>
-        <button className="m-menu-btn" onClick={onExitMobile} title="Desktop view">
-          🖥
-        </button>
+        <span style={{ display: "flex", gap: 4 }}>
+          {onEnterRotation && (
+            <button className="m-menu-btn" onClick={onEnterRotation} title="Fullscreen rotation">
+              📺
+            </button>
+          )}
+          <button className="m-menu-btn" onClick={onExitMobile} title="Desktop view">
+            🖥
+          </button>
+        </span>
       </header>
       <main className="m-main">
         {list.map((w) => (
