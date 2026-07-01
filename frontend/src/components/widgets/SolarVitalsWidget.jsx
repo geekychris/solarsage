@@ -456,23 +456,39 @@ export default function SolarVitalsWidget({ data, onChanged }) {
       {Array.isArray(l.smart_ac_rooms) && l.smart_ac_rooms.length > 0 && (
         <div className="sv-smart-ac">
           <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
-            Air conditioners (live from Home Assistant · watts from calibration)
+            Air conditioners (live from Home Assistant · watts scaled to fit measured load)
           </div>
           <div className="sv-smart-ac-grid">
-            {l.smart_ac_rooms.map((r) => (
-              <div
-                key={r.room}
-                className={`sv-smart-ac-chip ${r.on ? "on" : "off"}`}
-                title={`${r.entity_id} — ${r.state}${r.note && r.note !== "ok" ? ` (${r.note})` : ""}`}
-              >
-                <div className="sv-smart-ac-name">{r.name || r.room}</div>
-                <div className="sv-smart-ac-watts">
-                  {r.on
-                    ? `${(Number(r.watts) / 1000).toFixed(2)} kW`
-                    : "off"}
+            {l.smart_ac_rooms.map((r) => {
+              const rated = r.rated_watts;
+              const scale = r.scale;
+              const title = [
+                `${r.entity_id} — ${r.state}`,
+                r.note && r.note !== "ok" ? `(${r.note})` : null,
+                rated && scale != null && scale < 0.999
+                  ? `rated ${rated} W · scale ${(scale * 100).toFixed(0)}%`
+                  : null,
+              ].filter(Boolean).join(" · ");
+              return (
+                <div
+                  key={r.room}
+                  className={`sv-smart-ac-chip ${r.on ? "on" : "off"}`}
+                  title={title}
+                >
+                  <div className="sv-smart-ac-name">{r.name || r.room}</div>
+                  <div className="sv-smart-ac-watts">
+                    {r.on
+                      ? `${(Number(r.watts) / 1000).toFixed(2)} kW`
+                      : "off"}
+                  </div>
+                  {r.on && rated && scale != null && scale < 0.999 && (
+                    <div className="sv-smart-ac-rated">
+                      of {(rated / 1000).toFixed(1)} kW rated
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

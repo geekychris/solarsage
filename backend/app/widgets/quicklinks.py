@@ -48,6 +48,10 @@ class QuickLinksWidget(Widget):
     }
     default_config = {
         "links": [
+            {"group": "Apps",     "label": "Smart AC scheduler",
+             "url": "http://pi-sf.hitorro.com:5010/"},
+            {"group": "Apps",     "label": "Home Assistant",
+             "url": "http://ha-sf.hitorro.com:8123/"},
             {"group": "HOA",      "label": "El Dorado Ranch HOA",
              "url": "https://www.eldoradoranchhoa.com.mx/"},
             {"group": "Utilities", "label": "CFE outage map",

@@ -1629,6 +1629,7 @@ select, input {
 .sv-smart-ac-chip.off { color: var(--muted, #888); }
 .sv-smart-ac-name { font-weight: 600; }
 .sv-smart-ac-watts { font-size: 12px; margin-top: 2px; }
+.sv-smart-ac-rated { font-size: 10px; opacity: 0.7; margin-top: 1px; }
 .sv-appliance {
   display: grid; grid-template-columns: 1fr auto; gap: 3px;
   padding: 6px 8px; font-size: 12px; text-align: left;

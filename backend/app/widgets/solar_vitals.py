@@ -303,6 +303,11 @@ class SolarVitalsWidget(Widget):
         "smart_ac_enabled": True,
         "smart_ac_rooms": ["master", "guest", "dining",
                             "living", "office", "kyle"],
+        # When True, scale the sum of ON smart_ac rooms down to fit
+        # the (load - manual) headroom. Prevents the pie showing
+        # 6 kW of ACs when the inverter only reports 3 kW of load
+        # (compressors cycle off between duty periods).
+        "scale_smart_ac_to_load": True,
         # Each appliance may optionally link to a Home Assistant entity
         # (any domain — switch, sensor, binary_sensor, climate, etc.).
         # When ha_entity_id is set, the widget reads HA state on every
@@ -484,16 +489,47 @@ class SolarVitalsWidget(Widget):
                     "ha_entity_id": eid or None,
                     "source": source,
                 })
-        # Merge smart_ac rooms into the on-list — each ON room becomes
-        # its own slice with the calibrated wattage.
+        # Collect smart_ac rooms that are currently ON with a rated
+        # wattage — the "rated" figure is compressor-running draw, but
+        # compressors cycle off when the setpoint is met, so instant
+        # draw is usually lower than the sum-of-rated. Scale the ACs
+        # proportionally to fit the space left after manual appliances.
+        manual_sum = sum(a["watts"] for a in on_list)
+        ac_candidates = [
+            {"name": r["name"],
+             "rated_watts": float(r["watts"]),
+             "entity_id": r["entity_id"]}
+            for r in smart_ac_rooms
+            if r.get("on") and r.get("watts", 0) > 0
+        ]
+        ac_rated_sum = sum(c["rated_watts"] for c in ac_candidates)
+
+        ac_scale = 1.0
+        scale_acs = bool(config.get("scale_smart_ac_to_load", True))
+        if (scale_acs and load_v is not None and ac_rated_sum > 0):
+            remaining = max(0.0, load_v - manual_sum)
+            if remaining < ac_rated_sum:
+                ac_scale = remaining / ac_rated_sum
+
+        for c in ac_candidates:
+            shown = c["rated_watts"] * ac_scale
+            on_list.append({
+                "name": c["name"],
+                "watts": round(shown, 1),
+                "ha_entity_id": c["entity_id"],
+                "source": "smart_ac",
+                "rated_watts": round(c["rated_watts"]),
+                "scale": round(ac_scale, 3),
+            })
+
+        # Stamp scaled figure back onto each room so the chip row shows
+        # the same "shown" watts as the pie slice.
         for r in smart_ac_rooms:
             if r.get("on") and r.get("watts", 0) > 0:
-                on_list.append({
-                    "name": r["name"],
-                    "watts": float(r["watts"]),
-                    "ha_entity_id": r["entity_id"],
-                    "source": "smart_ac",
-                })
+                r["rated_watts"] = int(r["watts"])
+                r["watts"] = round(r["watts"] * ac_scale, 1)
+                r["scale"] = round(ac_scale, 3)
+
         sum_est_w = sum(a["watts"] for a in on_list)
         breakdown = list(on_list)
         if load_v is not None:

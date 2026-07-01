@@ -145,6 +145,86 @@ async def test_load_breakdown_marks_unaccounted(tmp_db_path):
 
 
 @pytest.mark.asyncio
+async def test_smart_ac_scaled_to_fit_measured_load(tmp_db_path, monkeypatch):
+    """When smart_ac rated watts overshoot the (load - manual) headroom,
+    each AC slice is scaled proportionally so the pie balances to load."""
+    await _seed_db(tmp_db_path, {
+        "soc": 60.0,
+        "pEpsL1N": 1500.0,
+        "pEpsL2N": 1000.0,   # 2500 W measured load
+        "batCapacity": 840.0,
+    })
+    import os
+    os.environ["EG4_DB_PATH"] = tmp_db_path
+
+    # Stub _fetch_smart_ac so we don't need a real HA. Two ACs on with
+    # 1400 + 1200 W rated = 2600 W — overshoots by 100 W after 400 W
+    # of manual baseline is subtracted from 2500 W load → 2100 W headroom.
+    async def fake_fetch(*a, **kw):
+        return [
+            {"room": "living", "name": "AC — Living", "entity_id": "input_boolean.ac_living",
+             "watts": 1400, "on": True, "state": "on", "note": "ok"},
+            {"room": "kyle",   "name": "AC — Kyle",   "entity_id": "input_boolean.ac_kyle",
+             "watts": 1200, "on": True, "state": "on", "note": "ok"},
+        ]
+    monkeypatch.setenv("HA_URL", "http://fake")
+    monkeypatch.setenv("HA_TOKEN", "fake")
+    monkeypatch.setattr(SV, "_fetch_smart_ac", fake_fetch)
+
+    w = SV.SolarVitalsWidget()
+    cfg = {**w.default_config, "appliances": [
+        {"name": "Baseline", "watts": 400, "on": True},
+    ]}
+    data = await w.fetch(cfg)
+    slices = {b["name"]: b for b in data["load"]["breakdown"]}
+    # Baseline is not scaled — user-declared manual
+    assert slices["Baseline"]["watts"] == 400
+    # ACs proportionally scaled: 2100 / 2600 = ~0.808
+    assert slices["AC — Living"]["scale"] == round(2100 / 2600, 3)
+    # 1400 * 0.808 ≈ 1131
+    assert 1120 < slices["AC — Living"]["watts"] < 1140
+    assert 960  < slices["AC — Kyle"]["watts"]   < 980
+    # Rated watts preserved on the slice
+    assert slices["AC — Living"]["rated_watts"] == 1400
+    # Total should now match load (± rounding) — no Unaccounted / Over-estimated
+    total = sum(b["watts"] for b in data["load"]["breakdown"])
+    assert 2495 < total < 2505
+    # Chip row also gets the scale
+    living = next(r for r in data["load"]["smart_ac_rooms"] if r["room"] == "living")
+    assert living["rated_watts"] == 1400
+    assert living["scale"] < 1.0
+
+
+@pytest.mark.asyncio
+async def test_smart_ac_scaling_can_be_disabled(tmp_db_path, monkeypatch):
+    await _seed_db(tmp_db_path, {
+        "soc": 60.0, "pEpsL1N": 1000.0, "pEpsL2N": 500.0,
+        "batCapacity": 840.0,
+    })
+    import os
+    os.environ["EG4_DB_PATH"] = tmp_db_path
+
+    async def fake_fetch(*a, **kw):
+        return [{"room": "living", "name": "AC — Living",
+                 "entity_id": "input_boolean.ac_living",
+                 "watts": 2000, "on": True, "state": "on", "note": "ok"}]
+    monkeypatch.setenv("HA_URL", "http://fake")
+    monkeypatch.setenv("HA_TOKEN", "fake")
+    monkeypatch.setattr(SV, "_fetch_smart_ac", fake_fetch)
+
+    w = SV.SolarVitalsWidget()
+    cfg = {**w.default_config, "appliances": [],
+           "scale_smart_ac_to_load": False}
+    data = await w.fetch(cfg)
+    slices = {b["name"]: b for b in data["load"]["breakdown"]}
+    # AC keeps its full rated watts even though load is only 1500 W
+    assert slices["AC — Living"]["watts"] == 2000
+    assert slices["AC — Living"]["scale"] == 1.0
+    # Over-estimated slice reflects the mismatch
+    assert "Over-estimated" in slices
+
+
+@pytest.mark.asyncio
 async def test_capacity_falls_back_to_setting_without_batcapacity(tmp_db_path):
     """When EG4 doesn't report batCapacity, we still get kWh via the
     settings row."""
