@@ -130,16 +130,24 @@ async def _latest_load_watts(
     return None, None
 
 
+CAPACITY_CANDIDATES = ("fullCapacity", "batCapacity")
+
+
 async def _capacity_kwh(
     db_path: str, serial: str, available: set[str], nominal_v: float,
     fallback_kwh: float,
 ) -> tuple[float, str]:
-    """Prefer EG4's live batCapacity (Ah) × nominal voltage; fall back
-    to the settings row."""
-    if "batCapacity" in available:
-        ah, _ = await _latest(db_path, serial, "batCapacity")
-        if ah is not None and ah > 0:
-            return ah * nominal_v / 1000.0, f"batCapacity={int(ah)}Ah × {nominal_v}V"
+    """Prefer EG4's stored battery-bank capacity (Ah) × nominal
+    voltage. Falls back to the settings row.
+
+    The poller stores ``fullCapacity`` (the field EG4 exposes in the
+    battery attribute block); older firmwares expose ``batCapacity``
+    in the live snapshot but don't get polled — we try that too."""
+    for f in CAPACITY_CANDIDATES:
+        if f in available:
+            ah, _ = await _latest(db_path, serial, f)
+            if ah is not None and ah > 0:
+                return ah * nominal_v / 1000.0, f"{f}={int(ah)}Ah × {nominal_v}V"
     return fallback_kwh, "settings.battery_capacity_kwh"
 
 
