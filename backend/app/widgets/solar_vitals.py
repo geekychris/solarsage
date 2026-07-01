@@ -457,11 +457,15 @@ class SolarVitalsWidget(Widget):
                 # sensor.smart_ac_calibration + input_boolean.ac_<room>
                 # for on/off. See docs/SMART_AC_INTEGRATION.md.
                 if config.get("smart_ac_enabled", True):
-                    rooms = config.get("smart_ac_rooms") or []
-                    if rooms:
-                        smart_ac_rooms = await _fetch_smart_ac(
-                            http, ha_url, ha_token, rooms,
-                        )
+                    # Fall back to the six known rooms so users with a
+                    # widget_config saved before smart_ac defaults were
+                    # added still get live per-AC data.
+                    rooms = config.get("smart_ac_rooms") or [
+                        "master", "guest", "dining", "living", "office", "kyle",
+                    ]
+                    smart_ac_rooms = await _fetch_smart_ac(
+                        http, ha_url, ha_token, rooms,
+                    )
 
         on_list = []
         for a in appliances_cfg:
