@@ -1589,9 +1589,22 @@ select, input {
 }
 .sv-pie-wrap { display: flex; gap: 12px; align-items: center; }
 .sv-pie-legend { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
-.sv-pie-leg-row { display: grid; grid-template-columns: 12px 1fr auto; gap: 6px; align-items: center; }
+.sv-pie-leg-row {
+  display: grid; grid-template-columns: 12px 1fr auto; gap: 6px;
+  align-items: center;
+  padding: 1px 4px; border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.sv-pie-leg-row.hover { background: rgba(255,255,255,0.08); }
 .sv-pie-swatch { width: 10px; height: 10px; border-radius: 2px; }
 .sv-pie-name { }
+.sv-pie-slice {
+  cursor: pointer;
+  transition: opacity 0.12s, filter 0.12s;
+}
+.sv-pie-slice.dim { opacity: 0.35; }
+.sv-pie-slice.hover { filter: brightness(1.25); }
 
 .sv-appliances {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));

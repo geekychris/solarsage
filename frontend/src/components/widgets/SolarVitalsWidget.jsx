@@ -30,6 +30,7 @@ const PIE_COLORS = [
 ];
 
 function LoadPie({ breakdown }) {
+  const [hover, setHover] = useState(null);
   const positive = (breakdown || []).filter(
     (b) => !b.negative && b.watts > 5,
   );
@@ -50,27 +51,51 @@ function LoadPie({ breakdown }) {
     const d = `M ${cx},${cy} L ${x0.toFixed(1)},${y0.toFixed(1)} A ${r},${r} 0 ${large},1 ${x1.toFixed(1)},${y1.toFixed(1)} Z`;
     const color = b.name === "Unaccounted" ? "#555" : PIE_COLORS[i % PIE_COLORS.length];
     a0 = a1;
-    return { d, color, ...b };
+    return { d, color, frac, ...b };
   });
+
+  const active = hover != null ? slices[hover] : null;
+  const centerBig = active
+    ? (active.watts / 1000).toFixed(2)
+    : (total / 1000).toFixed(1);
+  const centerSub = active
+    ? `${Math.round(active.frac * 100)}%`
+    : "kW load";
 
   return (
     <div className="sv-pie-wrap">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="sv-pie">
         {slices.map((s, i) => (
-          <path key={i} d={s.d} fill={s.color} stroke="#0e1116" strokeWidth="1" />
+          <path
+            key={i}
+            d={s.d}
+            fill={s.color}
+            stroke="#0e1116"
+            strokeWidth="1"
+            className={`sv-pie-slice ${hover === i ? "hover" : ""} ${hover != null && hover !== i ? "dim" : ""}`}
+            onMouseEnter={() => setHover(i)}
+            onMouseLeave={() => setHover(null)}
+          >
+            <title>{`${s.name} — ${(s.watts / 1000).toFixed(2)} kW (${Math.round(s.frac * 100)}%)`}</title>
+          </path>
         ))}
         {/* donut hole for the label */}
-        <circle cx={cx} cy={cy} r={r * 0.45} fill="var(--panel, #181c22)" />
-        <text x={cx} y={cy - 4} textAnchor="middle" fill="currentColor" fontSize="16" fontWeight="700">
-          {(total / 1000).toFixed(1)}
+        <circle cx={cx} cy={cy} r={r * 0.45} fill="var(--panel, #181c22)" pointerEvents="none" />
+        <text x={cx} y={cy - 4} textAnchor="middle" fill="currentColor" fontSize="16" fontWeight="700" pointerEvents="none">
+          {centerBig}
         </text>
-        <text x={cx} y={cy + 12} textAnchor="middle" fill="#888" fontSize="10">
-          kW load
+        <text x={cx} y={cy + 12} textAnchor="middle" fill="#888" fontSize="10" pointerEvents="none">
+          {centerSub}
         </text>
       </svg>
       <div className="sv-pie-legend">
         {slices.map((s, i) => (
-          <div key={i} className="sv-pie-leg-row">
+          <div
+            key={i}
+            className={`sv-pie-leg-row ${hover === i ? "hover" : ""}`}
+            onMouseEnter={() => setHover(i)}
+            onMouseLeave={() => setHover(null)}
+          >
             <span className="sv-pie-swatch" style={{ background: s.color }} />
             <span className="sv-pie-name">{s.name}</span>
             <span className="muted">{(s.watts / 1000).toFixed(2)} kW</span>
