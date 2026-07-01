@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
 import RotationConfigWidget from "./widgets/RotationConfigWidget.jsx";
+import NotificationsConfig from "./NotificationsConfig.jsx";
 
 const TABS = [
   { id: "system", label: "System" },
   { id: "rotation", label: "Rotation" },
+  { id: "notifications", label: "Notifications" },
 ];
 
 export default function Settings({ open, onClose, onSaved }) {
@@ -147,6 +149,8 @@ export default function Settings({ open, onClose, onSaved }) {
             <RotationConfigWidget />
           </div>
         )}
+
+        {active === "notifications" && <NotificationsConfig />}
       </div>
     </div>
   );

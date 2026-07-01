@@ -34,6 +34,63 @@ DEFAULT_ON_STATES = ("on", "cool", "heat", "heat_cool", "auto",
                      "fan_only", "playing", "true", "yes")
 
 
+async def _ha_entity(
+    http: aiohttp.ClientSession, ha_url: str, ha_token: str,
+    entity_id: str,
+) -> dict | None:
+    """Return the full entity dict (state + attributes) or None."""
+    try:
+        async with http.get(
+            f"{ha_url}/api/states/{entity_id}",
+            headers={"Authorization": f"Bearer {ha_token}"},
+            timeout=10,
+        ) as r:
+            if r.status != 200:
+                return None
+            return await r.json()
+    except Exception:
+        return None
+
+
+async def _fetch_smart_ac(
+    http: aiohttp.ClientSession, ha_url: str, ha_token: str,
+    rooms: list[str],
+) -> list[dict]:
+    """Query smart_ac_calibration + per-room booleans; return a list of
+    ``{room, name, watts, on, note}`` — one per configured room."""
+    calibration_entity = await _ha_entity(
+        http, ha_url, ha_token, "sensor.smart_ac_calibration",
+    )
+    per_room_watts: dict[str, int] = {}
+    per_room_note: dict[str, str] = {}
+    if calibration_entity:
+        results = ((calibration_entity.get("attributes") or {})
+                   .get("results") or {})
+        for room, info in results.items():
+            note = str((info or {}).get("note") or "")
+            delta = (info or {}).get("delta_w")
+            if isinstance(delta, (int, float)) and delta > 0:
+                per_room_watts[room] = int(delta)
+                per_room_note[room] = note
+
+    out = []
+    for room in rooms:
+        eid = f"input_boolean.ac_{room}"
+        st = await _ha_entity(http, ha_url, ha_token, eid)
+        state = str((st or {}).get("state") or "unknown").lower()
+        watts = per_room_watts.get(room, 0)
+        out.append({
+            "room": room,
+            "name": f"AC — {room.capitalize()}",
+            "entity_id": eid,
+            "watts": watts,
+            "on": state == "on",
+            "state": state,
+            "note": per_room_note.get(room, "no calibration"),
+        })
+    return out
+
+
 async def _resolve_ha_state(
     http: aiohttp.ClientSession, ha_url: str, ha_token: str,
     entity_id: str,
@@ -240,6 +297,12 @@ class SolarVitalsWidget(Widget):
         "serial": None,
         "cut_back_soc": 30,
         "battery_nominal_voltage": 51.2,
+        # When true, the widget also queries Home Assistant for the
+        # smart_ac scheduler's per-room calibration + on/off state.
+        # See docs/SMART_AC_INTEGRATION.md.
+        "smart_ac_enabled": True,
+        "smart_ac_rooms": ["master", "guest", "dining",
+                            "living", "office", "kyle"],
         # Each appliance may optionally link to a Home Assistant entity
         # (any domain — switch, sensor, binary_sensor, climate, etc.).
         # When ha_entity_id is set, the widget reads HA state on every
@@ -375,21 +438,29 @@ class SolarVitalsWidget(Widget):
         appliances_cfg = list(config.get("appliances") or [])
 
         # For each appliance with an HA entity, ask HA what state it's
-        # in. That answer overrides the manual `on` field. Cache-of-one:
-        # gather all entities in a single aiohttp session.
+        # in. That answer overrides the manual `on` field.
         ha_url = os.getenv("HA_URL", "").rstrip("/")
         ha_token = os.getenv("HA_TOKEN")
         ha_states: dict[str, str | None] = {}
+        smart_ac_rooms: list[dict] = []
         if ha_url and ha_token:
-            targets = [
-                a["ha_entity_id"] for a in appliances_cfg
-                if a.get("ha_entity_id")
-            ]
-            if targets:
-                async with aiohttp.ClientSession() as http:
-                    for eid in targets:
-                        ha_states[eid] = await _resolve_ha_state(
-                            http, ha_url, ha_token, eid,
+            async with aiohttp.ClientSession() as http:
+                targets = [
+                    a["ha_entity_id"] for a in appliances_cfg
+                    if a.get("ha_entity_id")
+                ]
+                for eid in targets:
+                    ha_states[eid] = await _resolve_ha_state(
+                        http, ha_url, ha_token, eid,
+                    )
+                # smart_ac integration — pulls per-room delta_w from
+                # sensor.smart_ac_calibration + input_boolean.ac_<room>
+                # for on/off. See docs/SMART_AC_INTEGRATION.md.
+                if config.get("smart_ac_enabled", True):
+                    rooms = config.get("smart_ac_rooms") or []
+                    if rooms:
+                        smart_ac_rooms = await _fetch_smart_ac(
+                            http, ha_url, ha_token, rooms,
                         )
 
         on_list = []
@@ -408,6 +479,16 @@ class SolarVitalsWidget(Widget):
                     "name": name, "watts": watts,
                     "ha_entity_id": eid or None,
                     "source": source,
+                })
+        # Merge smart_ac rooms into the on-list — each ON room becomes
+        # its own slice with the calibrated wattage.
+        for r in smart_ac_rooms:
+            if r.get("on") and r.get("watts", 0) > 0:
+                on_list.append({
+                    "name": r["name"],
+                    "watts": float(r["watts"]),
+                    "ha_entity_id": r["entity_id"],
+                    "source": "smart_ac",
                 })
         sum_est_w = sum(a["watts"] for a in on_list)
         breakdown = list(on_list)
@@ -469,6 +550,10 @@ class SolarVitalsWidget(Widget):
                     }
                     for a in appliances_cfg
                 ],
+                # smart_ac subsystem: per-room live state + calibrated
+                # watts, whether ON or OFF (so the UI can show all six
+                # ACs even when only some are running).
+                "smart_ac_rooms": smart_ac_rooms,
             },
             "battery_flow": {
                 "charge_kw":    round(charge_kw, 2),

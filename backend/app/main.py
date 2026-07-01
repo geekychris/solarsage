@@ -2362,6 +2362,81 @@ async def put_rotation(
 
 
 # ---------------------------------------------------------------------------
+# Announcements — per-source enable + warn-offsets + channels.
+# Backed by widget_config under the special id ``_announcements``.
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/api/announcements",
+    tags=["announcements"],
+    summary="Get auto-announcement config",
+)
+async def get_announcements(_: Session | None = Depends(require_read)):
+    from . import announcements as ann
+    saved = await widget_store.get_config(ann.CONFIG_ID) or {}
+    return {
+        "config": ann.merged_config(saved),
+        "default": ann.DEFAULT_CONFIG,
+    }
+
+
+@app.put(
+    "/api/announcements",
+    tags=["announcements"],
+    summary="Save auto-announcement config",
+)
+async def put_announcements(
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Body: ``{tides: {enabled, warn_minutes_before, channels, types,
+    stations}, hoa: {...}, storms: {...}}``. Unknown sources pass
+    through unchanged."""
+    from . import announcements as ann
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="body must be an object")
+    for src, cfg in body.items():
+        if not isinstance(cfg, dict):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{src!r} must be an object",
+            )
+        offs = cfg.get("warn_minutes_before")
+        if offs is not None and not (
+            isinstance(offs, list)
+            and all(isinstance(m, (int, float)) and m >= 0 for m in offs)
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{src}.warn_minutes_before must be a list of >=0 numbers",
+            )
+        chans = cfg.get("channels")
+        if chans is not None and not (
+            isinstance(chans, list)
+            and all(c in ("tts", "telegram", "log") for c in chans)
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{src}.channels must be a subset of tts/telegram/log",
+            )
+    await widget_store.put_config(ann.CONFIG_ID, body)
+    return {"config": ann.merged_config(body)}
+
+
+@app.post(
+    "/api/announcements/ingest",
+    tags=["announcements"],
+    summary="Force an immediate announcements ingest pass",
+)
+async def force_announcements_ingest(_: Session | None = Depends(require_read)):
+    from . import announcements as ann
+    saved = await widget_store.get_config(ann.CONFIG_ID) or {}
+    counts = await ann.ingest_all(event_store, widget_store, saved)
+    return {"ingested": counts}
+
+
+# ---------------------------------------------------------------------------
 # Solar-vitals calibration — write a measured wattage back to an
 # appliance in the widget's config. Called by the frontend calibration
 # modal after the user records "baseline" and "on" load readings and

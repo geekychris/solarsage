@@ -1597,6 +1597,25 @@ select, input {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 4px;
 }
+.sv-smart-ac { margin-top: 10px; }
+.sv-smart-ac-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 4px;
+}
+.sv-smart-ac-chip {
+  padding: 6px 8px; border-radius: 4px;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(255,255,255,0.03);
+  font-size: 11px; text-align: center;
+}
+.sv-smart-ac-chip.on {
+  background: rgba(255,209,102,0.15);
+  border-color: #ffd166;
+  color: #ffd166;
+}
+.sv-smart-ac-chip.off { color: var(--muted, #888); }
+.sv-smart-ac-name { font-weight: 600; }
+.sv-smart-ac-watts { font-size: 12px; margin-top: 2px; }
 .sv-appliance {
   display: grid; grid-template-columns: 1fr auto; gap: 3px;
   padding: 6px 8px; font-size: 12px; text-align: left;

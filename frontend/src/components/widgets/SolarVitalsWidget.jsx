@@ -428,6 +428,30 @@ export default function SolarVitalsWidget({ data, onChanged }) {
         </div>
       )}
 
+      {Array.isArray(l.smart_ac_rooms) && l.smart_ac_rooms.length > 0 && (
+        <div className="sv-smart-ac">
+          <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
+            Air conditioners (live from Home Assistant · watts from calibration)
+          </div>
+          <div className="sv-smart-ac-grid">
+            {l.smart_ac_rooms.map((r) => (
+              <div
+                key={r.room}
+                className={`sv-smart-ac-chip ${r.on ? "on" : "off"}`}
+                title={`${r.entity_id} — ${r.state}${r.note && r.note !== "ok" ? ` (${r.note})` : ""}`}
+              >
+                <div className="sv-smart-ac-name">{r.name || r.room}</div>
+                <div className="sv-smart-ac-watts">
+                  {r.on
+                    ? `${(Number(r.watts) / 1000).toFixed(2)} kW`
+                    : "off"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {Object.keys(today).length > 0 && (
         <div className="sv2-today">
           {today.todayYielding    != null && <span>☀ {today.todayYielding.toFixed(1)} kWh</span>}

@@ -28,7 +28,8 @@ from typing import Any
 
 from . import parser as event_parser
 from .store import Event, EventStore, Reminder
-from .tts import say
+from ..notify import dispatch as notify_dispatch
+from .. import announcements as announcements_mod
 
 log = logging.getLogger("eg4.events.scheduler")
 
@@ -139,16 +140,29 @@ async def _fire_due_reminders(store: EventStore) -> None:
             text = r.custom_text or _format_reminder_text(
                 ev.title, starts_at, r.minutes_before,
             )
+            # mode = "tts" | "telegram" | "tts+telegram" | "both"
+            mode = (r.mode or "tts").lower()
+            channels: list[str] = []
+            if "tts" in mode: channels.append("tts")
+            if "telegram" in mode: channels.append("telegram")
+            if mode == "both": channels = ["tts", "telegram"]
+            if not channels: channels = ["tts"]
             log.info(
-                "reminder firing: event=%s mins_before=%s text=%r",
-                ev.id, r.minutes_before, text,
+                "reminder firing: event=%s mins_before=%s channels=%s text=%r",
+                ev.id, r.minutes_before, channels, text,
             )
-            ok = await say(text)
-            # Mark fired even on TTS failure — better to skip than
+            any_ok = False
+            for ch in channels:
+                res = await notify_dispatch({"type": ch, "text": text})
+                any_ok = any_ok or bool(res.get("ok"))
+                if not res.get("ok"):
+                    log.warning(
+                        "reminder %s: channel %s failed: %s",
+                        r.id, ch, res.get("detail"),
+                    )
+            # Mark fired even on channel failure — better to skip than
             # spam the user every minute trying to re-fire.
             await store.mark_fired(r.id, _time.time())
-            if not ok:
-                log.warning("reminder %s: TTS failed; marked fired anyway", r.id)
 
 
 def _format_reminder_text(title: str, starts_at: datetime, minutes_before: int) -> str:
@@ -166,6 +180,15 @@ def _format_reminder_text(title: str, starts_at: datetime, minutes_before: int) 
     return f"Heads up: {title} is today at {time_str}, in about {hours_str}."
 
 
+async def _ingest_announcements(
+    store: EventStore, widget_store: Any,
+) -> None:
+    saved = await widget_store.get_config(announcements_mod.CONFIG_ID) or {}
+    counts = await announcements_mod.ingest_all(store, widget_store, saved)
+    if any(counts.values()):
+        log.info("announcements ingest: %s", counts)
+
+
 async def run_reminder_scheduler(
     store: EventStore, widget_store: Any,
 ) -> None:
@@ -178,6 +201,7 @@ async def run_reminder_scheduler(
             now = _time.time()
             if now - last_ingest >= INGEST_INTERVAL_SECONDS:
                 await _ingest_once(store, widget_store)
+                await _ingest_announcements(store, widget_store)
                 last_ingest = now
             await _fire_due_reminders(store)
         except asyncio.CancelledError:

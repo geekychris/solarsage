@@ -286,6 +286,12 @@ export const api = {
   getRotation: () => request("/api/rotation"),
   putRotation: (config) =>
     request("/api/rotation", { method: "PUT", body: config }),
+  // Auto-announcements
+  getAnnouncements: () => request("/api/announcements"),
+  putAnnouncements: (config) =>
+    request("/api/announcements", { method: "PUT", body: config }),
+  ingestAnnouncements: () =>
+    request("/api/announcements/ingest", { method: "POST" }),
   // Solar vitals calibration + config
   calibrateSolarVitals: (name, watts) =>
     request("/api/widgets/solar_vitals/calibrate", {
