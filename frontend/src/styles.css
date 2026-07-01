@@ -1565,17 +1565,48 @@ select, input {
   gap: 4px;
 }
 .sv-appliance {
+  display: grid; grid-template-columns: 1fr auto; gap: 3px;
   padding: 6px 8px; font-size: 12px; text-align: left;
   background: rgba(255,255,255,0.04);
   border: 1px solid var(--border, #232a35);
   color: inherit; border-radius: 4px;
-  cursor: pointer;
 }
 .sv-appliance.sv-app-on {
   background: rgba(255,209,102,0.15);
   border-color: #ffd166;
   color: #ffd166;
 }
+.sv-app-toggle {
+  background: none; border: none; text-align: left;
+  color: inherit; font-size: 12px; padding: 0;
+  cursor: pointer;
+}
+.sv-app-toggle:disabled { cursor: default; }
+.sv-app-ha { margin-left: 6px; font-size: 10px; }
+.sv-app-cal {
+  padding: 2px 6px; font-size: 14px;
+  background: none; border: 1px dashed var(--border, #232a35);
+  color: var(--muted, #888); border-radius: 3px;
+  cursor: pointer;
+}
+.sv-app-cal:hover {
+  border-color: var(--accent-2, #58a6ff); color: var(--accent-2, #58a6ff);
+}
+.sv-cal-live {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 8px 12px; border-radius: 6px;
+  background: rgba(255,209,102,0.08); border-left: 3px solid #ffd166;
+  margin-bottom: 12px;
+}
+.sv-cal-live strong {
+  font-size: 24px; color: #ffd166; font-variant-numeric: tabular-nums;
+}
+.sv-cal-steps {
+  padding-left: 20px; display: flex; flex-direction: column; gap: 12px;
+}
+.sv-cal-steps li { opacity: 0.5; }
+.sv-cal-steps li.sv-cal-current { opacity: 1; }
+.sv-cal-steps li.sv-cal-done { opacity: 0.7; }
 .sv2-today {
   display: flex; flex-wrap: wrap; gap: 10px;
   font-size: 12px; padding: 6px 8px;
