@@ -43,8 +43,11 @@ def _from_cell(v: Any, field: str) -> Any:
 
     * ``tags``, ``labels`` etc. — split comma/space to list
     * ``checked``, ``done``, boolean-ish fields — parse truthy strings
+      (None → False so widgets can rely on the value being a bool)
     * ``wait_min``, ``priority``, numeric fields — coerce to int when they parse
     """
+    if field in ("checked", "done", "starred"):
+        return _to_bool(v)
     if v is None:
         return None
     if field in ("tags",):
@@ -52,8 +55,6 @@ def _from_cell(v: Any, field: str) -> Any:
         if not s:
             return []
         return [t.strip() for t in s.replace(";", ",").split(",") if t.strip()]
-    if field in ("checked", "done", "starred"):
-        return _to_bool(v)
     if field in ("wait_min", "priority", "position", "kwh"):
         try:
             return int(str(v).strip())

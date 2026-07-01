@@ -84,10 +84,11 @@ async def test_prune_older_than(tmp_db_path):
     store = NewsStore(tmp_db_path)
     await store.init()
     await store.upsert_items("t", "url", "T", [{"title": "x", "link": "https://x"}])
-    # Immediate prune with cutoff 0 keeps everything
-    dropped = await store.prune_older_than(-1)
+    # Very-far-back cutoff keeps everything (nothing is older than that)
+    dropped = await store.prune_older_than(10 * 365 * 86400)  # 10 years
     assert dropped == 0
-    # Prune with a "future" cutoff drops everything
-    import time; time.sleep(0.01)
-    dropped = await store.prune_older_than(-100)
-    assert dropped >= 0  # depends on system clock; just check runs
+    # Cutoff of 0 seconds drops anything older than "now", which every
+    # row in the store is (they were written slightly before this call).
+    import time; time.sleep(0.02)
+    dropped = await store.prune_older_than(0)
+    assert dropped == 1

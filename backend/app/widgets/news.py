@@ -140,6 +140,18 @@ class NewsWidget(Widget):
                 },
             },
             "max_items_per_feed": {"type": "integer", "minimum": 1, "maximum": 20},
+            "source_lang": {
+                "type": "string",
+                "description": "ISO 639-1 code of the feed's language",
+            },
+            "auto_translate_to": {
+                "type": ["string", "null"],
+                "description": (
+                    "Target language; when set, item titles are "
+                    "translated on first view + cached in the "
+                    "translations table."
+                ),
+            },
         },
     }
     default_config = {

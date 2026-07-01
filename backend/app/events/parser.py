@@ -179,7 +179,9 @@ def _split_day_blocks(text: str) -> list[tuple[str, str, str]]:
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         block = text[start:end]
         header = m.group(0).strip()
-        out.append((m.group("dow"), header, block))
+        # Normalize dow to lowercase so downstream code (and tests)
+        # don't have to worry about capitalization variants.
+        out.append((m.group("dow").lower(), header, block))
     return out
 
 
