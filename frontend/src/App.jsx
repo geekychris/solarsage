@@ -6,6 +6,13 @@ import RotationMode from "./components/RotationMode.jsx";
 import { api, getToken, setToken } from "./api.js";
 
 const MOBILE_KEY = "eg4.mobile";
+const THEME_KEY = "eg4.theme";
+
+function applyTheme(theme) {
+  if (typeof document === "undefined") return;
+  if (theme === "light") document.documentElement.setAttribute("data-theme", "light");
+  else document.documentElement.removeAttribute("data-theme");
+}
 
 function urlViewParam() {
   if (typeof window === "undefined") return null;
@@ -20,7 +27,6 @@ function resolveInitialMobile() {
   const stored = localStorage.getItem(MOBILE_KEY);
   if (stored === "1") return true;
   if (stored === "0") return false;
-  // Auto: touch-capable narrow viewport
   const narrow = window.matchMedia("(max-width: 768px)").matches;
   const touch = navigator.maxTouchPoints > 0;
   return narrow && touch;
@@ -31,7 +37,17 @@ export default function App() {
   const [bootChecked, setBootChecked] = useState(false);
   const [mobile, setMobile] = useState(() => resolveInitialMobile());
   const [rotation, setRotation] = useState(() => urlViewParam() === "rotation");
+  const [theme, setThemeState] = useState(() =>
+    (typeof localStorage !== "undefined" && localStorage.getItem(THEME_KEY)) || "dark"
+  );
 
+  useEffect(() => { applyTheme(theme); }, [theme]);
+
+  const toggleTheme = () => {
+    const next = theme === "light" ? "dark" : "light";
+    setThemeState(next);
+    localStorage.setItem(THEME_KEY, next);
+  };
   const switchToMobile = () => {
     setMobile(true);
     localStorage.setItem(MOBILE_KEY, "1");
@@ -43,7 +59,6 @@ export default function App() {
   const enterRotation = () => setRotation(true);
   const exitRotation = () => {
     setRotation(false);
-    // Strip ?view=rotation so navigating back doesn't re-trigger it
     if (typeof window !== "undefined" && urlViewParam() === "rotation") {
       const url = new URL(window.location.href);
       url.searchParams.delete("view");
@@ -100,6 +115,8 @@ export default function App() {
         onLoggedOut={() => setSession(null)}
         onExitMobile={switchToDesktop}
         onEnterRotation={enterRotation}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
@@ -109,6 +126,8 @@ export default function App() {
       onLoggedOut={() => setSession(null)}
       onSwitchMobile={switchToMobile}
       onEnterRotation={enterRotation}
+      theme={theme}
+      onToggleTheme={toggleTheme}
     />
   );
 }

@@ -21,7 +21,7 @@ import LocalTab from "./LocalTab.jsx";
 
 const POLL_LIVE_MS = 15_000;
 
-export default function Dashboard({ session, onLoggedOut, onSwitchMobile, onEnterRotation }) {
+export default function Dashboard({ session, onLoggedOut, onSwitchMobile, onEnterRotation, theme, onToggleTheme }) {
   const [inverters, setInverters] = useState([]);
   const [selected, setSelected] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
@@ -122,6 +122,14 @@ export default function Dashboard({ session, onLoggedOut, onSwitchMobile, onEnte
           )}
           {onEnterRotation && (
             <button onClick={onEnterRotation} title="Enter fullscreen rotation">📺 Rotate</button>
+          )}
+          {onToggleTheme && (
+            <button
+              onClick={onToggleTheme}
+              title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+            >
+              {theme === "light" ? "🌙" : "☀"}
+            </button>
           )}
           <button onClick={() => setSettingsOpen(true)}>Settings</button>
           <button onClick={() => logout(false)}>Sign out</button>

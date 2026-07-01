@@ -101,7 +101,7 @@ function MobileCard({ widget, tzOffsetMinutes, onRefreshed }) {
   );
 }
 
-export default function MobileApp({ session, onLoggedOut, onExitMobile, onEnterRotation }) {
+export default function MobileApp({ session, onLoggedOut, onExitMobile, onEnterRotation, theme, onToggleTheme }) {
   const [widgets, setWidgets] = useState(null);
   const [tzOffsetMinutes, setTzOffsetMinutes] = useState(null);
   const [activeTab, setActiveTab] = useState(null);
@@ -167,6 +167,11 @@ export default function MobileApp({ session, onLoggedOut, onExitMobile, onEnterR
         <span className="m-brand">SolarSage</span>
         <span className="m-tab-label">{active}</span>
         <span style={{ display: "flex", gap: 4 }}>
+          {onToggleTheme && (
+            <button className="m-menu-btn" onClick={onToggleTheme} title="Toggle theme">
+              {theme === "light" ? "🌙" : "☀"}
+            </button>
+          )}
           {onEnterRotation && (
             <button className="m-menu-btn" onClick={onEnterRotation} title="Fullscreen rotation">
               📺
