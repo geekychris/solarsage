@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { api } from "../../api.js";
 
 function prettyDate(s) {
@@ -10,14 +10,22 @@ function prettyDate(s) {
   });
 }
 
-function NewsItem({ item, defaultSource = "es" }) {
-  // Prefer the server-cached translation if present; the "translate"
-  // button then just toggles visibility. Falls back to on-demand
-  // MyMemory call when auto-translate isn't enabled for the widget.
-  const [translated, setTranslated] = useState(item.translated_title || null);
-  const [showTr, setShowTr] = useState(!!item.translated_title);
+// One row. Displays the ES title + cached EN if present, plus a manual
+// on-demand translate button that also seeds the cache.
+function NewsItem({ item, defaultSource, defaultTarget, cachedTranslation, onTranslated }) {
+  const [translated, setTranslated] = useState(
+    cachedTranslation || item.translated_title || null
+  );
+  const [showTr, setShowTr] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+
+  // Keep local state in sync when the parent flushes new cached translations.
+  useEffect(() => {
+    if (cachedTranslation && cachedTranslation !== translated) {
+      setTranslated(cachedTranslation);
+    }
+  }, [cachedTranslation, translated]);
 
   const doTranslate = useCallback(async (event) => {
     event.preventDefault();
@@ -25,15 +33,27 @@ function NewsItem({ item, defaultSource = "es" }) {
     setBusy(true);
     setErr("");
     try {
-      const r = await api.translate(item.title, defaultSource, "en");
-      setTranslated(r.target_text);
-      setShowTr(true);
+      // Prefer the news batch endpoint (cheap, cached) if we have an id.
+      if (item.id) {
+        const r = await api.batchTranslateNews([item.id], defaultSource, defaultTarget);
+        const t = r.translated?.[item.id];
+        if (t) {
+          setTranslated(t);
+          setShowTr(true);
+          onTranslated?.(item.id, t);
+        }
+      } else {
+        // Fallback for legacy fetches without an id
+        const r = await api.translate(item.title, defaultSource, defaultTarget);
+        setTranslated(r.target_text);
+        setShowTr(true);
+      }
     } catch (ex) {
       setErr(ex.message || "translate failed");
     } finally {
       setBusy(false);
     }
-  }, [translated, item.title, defaultSource]);
+  }, [translated, item.id, item.title, defaultSource, defaultTarget, onTranslated]);
 
   return (
     <div className="news-item">
@@ -68,11 +88,50 @@ function NewsItem({ item, defaultSource = "es" }) {
 }
 
 export default function NewsWidget({ data }) {
+  const [pending, setPending] = useState({}); // id → translated title just fetched
+  const requestedRef = useRef(new Set());     // ids we've already asked to translate
+
+  const target = data?.auto_translated_to || "en";
+  const source = "es";
+
+  // Collect items that need translation on first render / update.
+  const untranslatedIds = useMemo(() => {
+    const ids = [];
+    for (const f of data?.feeds || []) {
+      for (const it of f.items || []) {
+        if (it.id && !it.translated_title && !pending[it.id] && !requestedRef.current.has(it.id)) {
+          ids.push(it.id);
+        }
+      }
+    }
+    return ids;
+  }, [data, pending]);
+
+  // Auto-translate what's visible if the widget's config has a target
+  // language set (Baja news defaults to "en").
+  useEffect(() => {
+    if (!data?.auto_translated_to || untranslatedIds.length === 0) return;
+    untranslatedIds.forEach((id) => requestedRef.current.add(id));
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await api.batchTranslateNews(untranslatedIds, source, target);
+        if (!cancelled && r.translated) {
+          setPending((prev) => ({ ...prev, ...r.translated }));
+        }
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [data?.auto_translated_to, untranslatedIds, source, target]);
+
+  const noteTranslated = useCallback((id, text) => {
+    setPending((prev) => ({ ...prev, [id]: text }));
+  }, []);
+
   if (!data) return <div className="muted">Loading…</div>;
   const feeds = data.feeds || [];
-  if (feeds.length === 0) {
-    return <div className="muted">No feeds configured.</div>;
-  }
+  if (feeds.length === 0) return <div className="muted">No feeds configured.</div>;
+
   return (
     <div className="news">
       {feeds.map((f, i) => (
@@ -87,7 +146,14 @@ export default function NewsWidget({ data }) {
             )}
           </div>
           {(f.items || []).map((it, j) => (
-            <NewsItem key={j} item={it} defaultSource="es" />
+            <NewsItem
+              key={it.id ?? `${i}-${j}`}
+              item={it}
+              defaultSource={source}
+              defaultTarget={target}
+              cachedTranslation={pending[it.id]}
+              onTranslated={noteTranslated}
+            />
           ))}
         </div>
       ))}

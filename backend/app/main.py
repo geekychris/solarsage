@@ -79,6 +79,7 @@ from .widgets.consumption_yoy import ConsumptionYoYWidget
 from .translations import TranslationsStore, mymemory_translate
 from .widgets.todo import TodoWidget
 from .sheets import SheetsSync, load_sheets_from_env
+from .news_store import NewsStore
 from .events import EventStore, run_reminder_scheduler
 from .events.store import Event as EventRow, Reminder as ReminderRow, event_to_dict
 from .events.scheduler import _ingest_once as events_ingest_once
@@ -101,6 +102,7 @@ history = History(DB_PATH)
 widget_store = WidgetStore(DB_PATH)
 event_store = EventStore(DB_PATH)
 translations_store = TranslationsStore(DB_PATH)
+news_store = NewsStore(DB_PATH)
 sheets: SheetsSync | None = load_sheets_from_env()
 if sheets is not None:
     log.info("Google Sheets sync enabled")
@@ -245,6 +247,7 @@ async def lifespan(app: FastAPI):
     await widget_store.init()
     await event_store.init()
     await translations_store.init()
+    await news_store.init()
     await _bootstrap_default_site()
     log.info("history db ready at %s", DB_PATH)
     # Start the auto-login loop unconditionally — it idles if no creds are
@@ -2194,6 +2197,73 @@ async def delete_translation(
 ):
     await translations_store.delete(tid)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# News archive + on-demand translation. Every fetched news item is stored
+# in the news_items table; translation happens lazily on view.
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/api/news/history",
+    tags=["news"],
+    summary="Full news archive for a widget",
+)
+async def get_news_history(
+    widget_id: str = Query(default="baja_news"),
+    limit: int = Query(default=100, ge=1, le=1000),
+    translate_to: str | None = Query(default=None),
+    translate_from: str = Query(default="es"),
+    _: Session | None = Depends(require_read),
+):
+    """Return archived news items across all fetches for a widget.
+    Useful for search / retrospection / building an offline history."""
+    items = await news_store.recent(
+        widget_id,
+        translate_target=translate_to,
+        translate_source=translate_from,
+        limit=limit,
+    )
+    return {"widget_id": widget_id, "items": items}
+
+
+@app.post(
+    "/api/news/translate",
+    tags=["news"],
+    summary="Batch-translate a list of news item IDs",
+)
+async def post_news_translate(
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Body: ``{"ids":[1,2,3], "source":"es", "target":"en"}``.
+
+    For each id, looks up the news_items row, then translates its
+    title if not already cached. Returns ``{id: translated_title}``
+    for successful translations. Uses the translations table as its
+    cache — repeated calls for the same title are free."""
+    ids = body.get("ids") or []
+    source = str(body.get("source") or "es").lower()
+    target = str(body.get("target") or "en").lower()
+    out: dict[int, str] = {}
+    for raw_id in ids:
+        try:
+            item_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        item = await news_store.get(item_id)
+        if not item:
+            continue
+        try:
+            translated = await translations_store.translate_cached(
+                source, target, item["title"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("news translate id=%s failed: %s", item_id, exc)
+            continue
+        out[item_id] = translated
+    return {"translated": out}
 
 
 @app.post("/api/tts/say", tags=["tts"], summary="Speak arbitrary text")

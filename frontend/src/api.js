@@ -260,4 +260,16 @@ export const api = {
     request(`/api/translations/${id}/star`, { method: "POST" }),
   deleteTranslation: (id) =>
     request(`/api/translations/${id}`, { method: "DELETE" }),
+  // News
+  newsHistory: (widgetId, opts = {}) => {
+    const p = new URLSearchParams({ widget_id: widgetId });
+    if (opts.limit) p.set("limit", String(opts.limit));
+    if (opts.translate_to) p.set("translate_to", opts.translate_to);
+    return request(`/api/news/history?${p.toString()}`);
+  },
+  batchTranslateNews: (ids, source = "es", target = "en") =>
+    request("/api/news/translate", {
+      method: "POST",
+      body: { ids, source, target },
+    }),
 };
