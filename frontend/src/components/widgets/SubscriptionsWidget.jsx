@@ -240,16 +240,31 @@ function SubRow({ sub, widgets, onEdit, onDelete, onTest }) {
   const rule = sub.rule || {};
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
+  const [err, setErr] = useState(null);
 
   const doTest = async () => {
     setBusy(true);
+    setErr(null);
+    setResult(null);
     try {
       const r = await onTest(sub.id);
       setResult(r);
+    } catch (ex) {
+      setErr(ex?.message || String(ex) || "test failed");
     } finally {
       setBusy(false);
     }
   };
+
+  // Auto-clear the last test result / error after a bit so the card
+  // doesn't fill up with old text.
+  useEffect(() => {
+    if (!result && !err) return;
+    const id = setTimeout(() => { setResult(null); setErr(null); }, 15_000);
+    return () => clearTimeout(id);
+  }, [result, err]);
+
+  const allOk = result?.results?.every((r) => r.ok);
 
   return (
     <div className={`sub-row ${rule.enabled === false ? "sub-disabled" : ""}`}>
@@ -270,17 +285,33 @@ function SubRow({ sub, widgets, onEdit, onDelete, onTest }) {
             last fired {new Date(sub.last_fired_at * 1000).toLocaleString()}: {sub.last_result}
           </div>
         )}
-        {result && (
-          <div className="sub-test-result">
-            test → {result.results.map((r) =>
+        {err && (
+          <div className="sub-test-result sub-test-err">
+            test failed → {err}
+          </div>
+        )}
+        {result && !err && (
+          <div className={`sub-test-result ${allOk ? "sub-test-ok" : "sub-test-warn"}`}>
+            {allOk ? "✓ test fired: " : "⚠ test result: "}
+            {(result.results || []).map((r) =>
               `${r.channel}: ${r.ok ? "ok" : r.detail}`
-            ).join("; ")}
+            ).join("; ") || "no actions configured"}
+            {result.message && (
+              <div className="muted" style={{ fontSize: 10 }}>
+                message: "{result.message}"
+              </div>
+            )}
           </div>
         )}
       </div>
       <div className="sub-actions">
-        <button onClick={doTest} disabled={busy} title="Fire actions now">
-          {busy ? "…" : "🔔 Test"}
+        <button
+          onClick={doTest}
+          disabled={busy}
+          title="Fire actions now (bypasses condition + cooldown)"
+          className={busy ? "sub-test-busy" : ""}
+        >
+          {busy ? "sending…" : "🔔 Test"}
         </button>
         <button onClick={() => onEdit(sub)}>✎</button>
         <button onClick={() => onDelete(sub.id)}>✕</button>
