@@ -1638,8 +1638,8 @@ select, input {
 /* --- Rotation fullscreen player --- */
 .rot-app {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  background: #06090d;
-  color: var(--text, #eee);
+  background: var(--bg);
+  color: var(--text);
   display: flex; flex-direction: column;
   z-index: 100;
   cursor: pointer;
@@ -1647,42 +1647,100 @@ select, input {
 .rot-header {
   display: flex; justify-content: space-between; align-items: center;
   padding: 14px 24px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
 }
-.rot-title { font-size: 22px; font-weight: 700; letter-spacing: 0.5px; }
-.rot-meta { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--muted, #888); }
-.rot-paused { color: #ffd166; font-weight: 700; }
+.rot-title { font-size: 28px; font-weight: 700; letter-spacing: 0.5px; }
+.rot-meta { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); }
+.rot-paused { color: var(--warn, #d29922); font-weight: 700; }
 .rot-btn {
-  background: none; border: 1px solid var(--border, #2a2f37);
+  background: none; border: 1px solid var(--border);
   padding: 4px 10px; border-radius: 4px; color: inherit;
 }
+/* The stage. Large baseline font + per-widget overrides below so
+   text is readable from across the room. */
 .rot-stage {
-  flex: 1; padding: 32px 40px;
+  flex: 1;
+  padding: 40px 80px;
   display: flex; flex-direction: column;
+  justify-content: center;
   overflow: auto;
   cursor: default;
 }
-.rot-stage > * { flex: 1; font-size: 18px; }
-.rot-stage .sv-soc-value { font-size: 96px; }
-.rot-stage .sv-soc-block { min-width: 260px; padding: 20px 24px; }
-.rot-stage .sv-flow { font-size: 22px; }
-.rot-stage .sv-projection { font-size: 20px; padding: 16px 20px; }
-.rot-stage .sv-cutback { font-size: 18px; padding: 12px 18px; }
+.rot-stage > * {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  font-size: 18px;   /* baseline; specific overrides below */
+}
+
+/* Solar vitals fills the stage — bigger tiles, taller flow diagram,
+   larger pie chart. */
+.rot-stage .sv2 { gap: 20px; }
+.rot-stage .sv-flow { height: 320px; }
+.rot-stage .sv2-summary { gap: 14px; }
+.rot-stage .sv2-tile { padding: 18px 20px; }
+.rot-stage .sv2-big { font-size: 56px; }
+.rot-stage .sv2-label { font-size: 13px; }
+.rot-stage .sv2-sub { font-size: 15px; }
+.rot-stage .sv2-strings { font-size: 13px; }
+.rot-stage .sv-projection { font-size: 22px; padding: 20px 24px; }
+.rot-stage .sv-cutback { font-size: 20px; padding: 16px 20px; }
+.rot-stage .sv-appliances { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.rot-stage .sv-appliance { padding: 12px 14px; font-size: 15px; }
+.rot-stage .sv2-today { font-size: 15px; padding: 10px 14px; gap: 16px; }
+
+/* Weather */
+.rot-stage .weather-icon { font-size: 72px; }
+.rot-stage .weather-big { font-size: 60px; }
+.rot-stage .weather-day-icon { font-size: 36px; }
+
+/* AQI */
+.rot-stage .aqi-big { font-size: 80px; }
+
+/* Tides — bigger day cards */
+.rot-stage .tide-day-card { padding: 18px 22px; }
+.rot-stage .tide-day-label { font-size: 20px; }
+.rot-stage .tide-day-table { font-size: 18px; }
+
+/* Sun/moon */
+.rot-stage .moon-icon { font-size: 64px; }
+.rot-stage .sun-day { font-size: 20px; }
+
+/* HOA + events */
+.rot-stage .hoa-pdf { font-size: 20px; }
+.rot-stage .event-row { font-size: 18px; }
+.rot-stage .event-time { font-size: 22px; }
+.rot-stage .event-title { font-size: 22px; }
+
+/* Fishing / marine */
+.rot-stage .marine-big { font-size: 40px; }
+.rot-stage .fish-score { font-size: 22px; }
+
+/* Quakes / storms */
+.rot-stage .quake-row, .rot-stage .storm-card { font-size: 18px; }
+.rot-stage .quake-mag, .rot-stage .storm-name { font-size: 22px; }
+
+/* News item */
+.rot-stage .news-title { font-size: 22px; line-height: 1.3; }
+.rot-stage .news-translated { font-size: 18px; }
+
 .rot-progress {
-  height: 3px; background: #6cd1ff;
+  height: 3px; background: var(--accent-2, #58a6ff);
   transition: width 0.25s linear;
   min-width: 0;
 }
 .rot-hint {
-  padding: 6px 24px 10px;
-  font-size: 11px; color: var(--muted, #888);
+  padding: 8px 24px 12px;
+  font-size: 12px; color: var(--muted);
   text-align: center;
+  background: var(--panel);
 }
 .rot-loading, .rot-error, .rot-empty {
   padding: 40px; text-align: center;
   min-height: 100vh; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px;
-  background: #06090d; color: var(--text, #eee);
+  background: var(--bg); color: var(--text);
 }
 
 /* --- Rotation config UI --- */
