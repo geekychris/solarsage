@@ -1289,6 +1289,21 @@ select, input {
 }
 .fuel-delta.positive { background: rgba(111,220,140,0.15); color: #6fdc8c; }
 .fuel-delta.negative { background: rgba(239,111,108,0.15); color: #ef6f6c; }
+.fuel-source {
+  padding: 6px 8px; border-radius: 4px;
+  border: 1px solid var(--border, #232a35);
+}
+.fuel-source.fuel-real {
+  border-color: rgba(108,209,255,0.35);
+  background: rgba(108,209,255,0.08);
+}
+.fuel-source-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 12px;
+}
+.fuel-source-name { font-weight: 600; }
+.fuel-source-tag { font-size: 10px; }
+.fuel-stale { color: #ffd166; font-weight: 600; }
 
 /* Consumption YoY */
 .yoy { display: flex; flex-direction: column; gap: 6px; }
@@ -1678,6 +1693,25 @@ select, input {
 .acpv-legend-note { margin-left: auto; font-size: 11px; }
 .acpv-svg { display: block; }
 .acpv-tip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+
+/* When to run */
+.wtr-excess-bar { display: block; background: rgba(255,255,255,0.03); border-radius: 4px; }
+.wtr-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.wtr-item {
+  padding: 8px 10px; border-radius: 6px;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(255,255,255,0.03);
+}
+.wtr-item.fits {
+  border-color: #6fdc8c; background: rgba(111,220,140,0.10);
+}
+.wtr-item.partial {
+  border-color: #ffd166; background: rgba(255,209,102,0.08);
+}
+.wtr-item-head { font-size: 13px; }
+.wtr-name { font-weight: 700; }
+.wtr-time { font-size: 13px; margin-top: 2px; }
+.wtr-reason { font-size: 11px; margin-top: 2px; }
 .sv-appliance {
   display: grid; grid-template-columns: 1fr auto; gap: 3px;
   padding: 6px 8px; font-size: 12px; text-align: left;

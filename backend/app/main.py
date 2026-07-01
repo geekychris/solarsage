@@ -62,6 +62,7 @@ from .widgets.quicklinks import QuickLinksWidget
 from .widgets.water_tank import WaterTankWidget
 from .widgets.sunset import SunsetWidget
 from .widgets.acpv_overlay import AcPvOverlayWidget
+from .widgets.when_to_run import WhenToRunWidget
 from .widgets.property_mode import PropertyModeWidget
 from .widgets.news import NewsWidget
 from .widgets.reservations import ReservationsWidget
@@ -177,6 +178,7 @@ def _register_builtin_widgets() -> None:
         WaterTankWidget(),
         SunsetWidget(),
         AcPvOverlayWidget(),
+        WhenToRunWidget(),
         PropertyTaxWidget(),
         ContactsWidget(),
         TodoWidget(),
