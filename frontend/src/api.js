@@ -272,4 +272,14 @@ export const api = {
       method: "POST",
       body: { ids, source, target },
     }),
+  // Notifications + subscriptions
+  notifyTest: (action) =>
+    request("/api/notify/test", { method: "POST", body: action }),
+  listSubscriptions: () => request("/api/subscriptions"),
+  upsertSubscription: (sub) =>
+    request("/api/subscriptions", { method: "POST", body: sub }),
+  deleteSubscription: (id) =>
+    request(`/api/subscriptions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  testSubscription: (id) =>
+    request(`/api/subscriptions/${encodeURIComponent(id)}/test`, { method: "POST" }),
 };

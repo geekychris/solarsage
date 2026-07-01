@@ -84,6 +84,12 @@ from .events import EventStore, run_reminder_scheduler
 from .events.store import Event as EventRow, Reminder as ReminderRow, event_to_dict
 from .events.scheduler import _ingest_once as events_ingest_once
 from .events.tts import say as tts_say
+from .subscriptions import (
+    SubscriptionStore,
+    evaluate_and_fire as _sub_evaluate_and_fire,
+)
+from . import notify as _notify
+from .mqtt_publisher import MqttPublisher, load_from_env as _load_mqtt
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -103,11 +109,21 @@ widget_store = WidgetStore(DB_PATH)
 event_store = EventStore(DB_PATH)
 translations_store = TranslationsStore(DB_PATH)
 news_store = NewsStore(DB_PATH)
+subscriptions_store = SubscriptionStore(DB_PATH)
 sheets: SheetsSync | None = load_sheets_from_env()
 if sheets is not None:
     log.info("Google Sheets sync enabled")
 else:
     log.info("Google Sheets sync not configured (widgets use SQLite)")
+mqtt: MqttPublisher | None = _load_mqtt()
+if mqtt is not None:
+    log.info("MQTT publishing enabled (broker=%s)", mqtt.broker)
+else:
+    log.info("MQTT publishing not configured")
+_SUBS_BUNDLE = {
+    "store": subscriptions_store,
+    "evaluate_and_fire": _sub_evaluate_and_fire,
+}
 
 
 def _register_builtin_widgets() -> None:
@@ -248,6 +264,7 @@ async def lifespan(app: FastAPI):
     await event_store.init()
     await translations_store.init()
     await news_store.init()
+    await subscriptions_store.init()
     await _bootstrap_default_site()
     log.info("history db ready at %s", DB_PATH)
     # Start the auto-login loop unconditionally — it idles if no creds are
@@ -268,9 +285,14 @@ async def lifespan(app: FastAPI):
                         _w.sheets_tab, _w.id, exc,
                     )
     widgets_task = asyncio.create_task(
-        run_widget_refreshers(widget_registry, widget_store, sheets)
+        run_widget_refreshers(
+            widget_registry, widget_store, sheets, _SUBS_BUNDLE, mqtt,
+        )
     )
-    log.info("widget refreshers started (%d widgets)", len(list(widget_registry.all())))
+    log.info(
+        "widget refreshers started (%d widgets, subs=on, mqtt=%s)",
+        len(list(widget_registry.all())), "on" if mqtt else "off",
+    )
     events_task = asyncio.create_task(
         run_reminder_scheduler(event_store, widget_store)
     )
@@ -281,6 +303,8 @@ async def lifespan(app: FastAPI):
     alerts_task.cancel()
     if auto_task:
         auto_task.cancel()
+    if mqtt is not None:
+        await mqtt.close()
     await sessions.drop_all()
 
 
@@ -1882,7 +1906,7 @@ async def put_widget_config(
     await widget_store.put_config(w.id, body)
     # New config — pull fresh data immediately so the UI reflects the change
     # without waiting for the next refresh tick.
-    await widget_refresh_now(w, widget_store, sheets)
+    await widget_refresh_now(w, widget_store, sheets, _SUBS_BUNDLE, mqtt)
     state = await widget_store.get_state(w.id)
     return {
         "id": w.id,
@@ -1902,7 +1926,7 @@ async def post_widget_refresh(
     _: Session | None = Depends(require_read),
 ):
     w = _require_widget(widget_id)
-    await widget_refresh_now(w, widget_store, sheets)
+    await widget_refresh_now(w, widget_store, sheets, _SUBS_BUNDLE, mqtt)
     return {"id": w.id, **(await _widget_payload(w))}
 
 
@@ -2264,6 +2288,99 @@ async def post_news_translate(
             continue
         out[item_id] = translated
     return {"translated": out}
+
+
+# ---------------------------------------------------------------------------
+# Notifications + threshold subscriptions.
+# Notifications route through .notify.dispatch which knows about TTS
+# (via the pi5 speaker) and Telegram (via Home Assistant's REST API).
+# Rules stored in the subscriptions table are evaluated after every
+# widget refresh; edge-triggered (false → true) on a per-rule cooldown.
+# ---------------------------------------------------------------------------
+
+
+@app.post(
+    "/api/notify/test",
+    tags=["notify"],
+    summary="Fire one notification action for testing",
+)
+async def post_notify_test(
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Body: an action dict, e.g. ``{"type":"telegram","text":"hi"}``
+    or ``{"type":"tts","text":"hola"}``. Returns the channel's
+    ok/detail so you can verify HA_URL / HA_TOKEN / TTS routing."""
+    result = await _notify.dispatch(body)
+    return result
+
+
+@app.get(
+    "/api/subscriptions",
+    tags=["subscriptions"],
+    summary="List all subscription rules",
+)
+async def list_subscriptions(_: Session | None = Depends(require_read)):
+    subs = await subscriptions_store.list_all()
+    return {"subscriptions": subs}
+
+
+@app.post(
+    "/api/subscriptions",
+    tags=["subscriptions"],
+    summary="Create or update a subscription rule",
+)
+async def upsert_subscription(
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Body: ``{id?, widget_id, name, condition:{path,op,value},
+    message, actions:[{type,...}], enabled?, cooldown_minutes?}``.
+    Pass an id to update; omit for create."""
+    try:
+        saved = await subscriptions_store.upsert(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return saved
+
+
+@app.delete(
+    "/api/subscriptions/{sub_id}",
+    tags=["subscriptions"],
+    summary="Delete a subscription rule",
+)
+async def delete_subscription(
+    sub_id: str, _: Session | None = Depends(require_read),
+):
+    await subscriptions_store.delete(sub_id)
+    return {"ok": True}
+
+
+@app.post(
+    "/api/subscriptions/{sub_id}/test",
+    tags=["subscriptions"],
+    summary="Fire this rule's actions right now (bypass condition + cooldown)",
+)
+async def test_subscription(
+    sub_id: str, _: Session | None = Depends(require_read),
+):
+    sub = await subscriptions_store.get(sub_id)
+    if not sub:
+        raise HTTPException(status_code=404, detail="subscription not found")
+    rule = sub["rule"]
+    # Render against the widget's current data if we can
+    state = await widget_store.get_state(sub["widget_id"])
+    data = state.data if state else {}
+    message = _notify_render(rule.get("message", ""), data) or rule.get("name", "")
+    results = await _notify.dispatch_all(
+        rule.get("actions") or [], default_text=message,
+    )
+    return {"id": sub_id, "message": message, "results": results}
+
+
+def _notify_render(template: str, data: Any) -> str:
+    from .subscriptions import render_message
+    return render_message(template, data)
 
 
 @app.post("/api/tts/say", tags=["tts"], summary="Speak arbitrary text")

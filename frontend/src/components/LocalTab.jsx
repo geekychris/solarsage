@@ -35,6 +35,7 @@ import SpanishWidget from "./widgets/SpanishWidget.jsx";
 import CostcoFuelWidget from "./widgets/CostcoFuelWidget.jsx";
 import ConsumptionYoYWidget from "./widgets/ConsumptionYoYWidget.jsx";
 import TodoWidget from "./widgets/TodoWidget.jsx";
+import SubscriptionsWidget from "./widgets/SubscriptionsWidget.jsx";
 import WidgetSettings from "./WidgetSettings.jsx";
 
 const RENDERERS = {
@@ -207,20 +208,31 @@ export default function LocalTab({ tzOffsetMinutes }) {
   // /api/widgets for its data.
   const widgetsWithEvents = useMemo(() => {
     if (widgets === null) return null;
-    const evRow = {
-      id: "_events",
-      meta: {
-        kind: "_events",
-        name: "Today's events",
-        description:
-          "HOA activities (auto-extracted) and manual events. Reminders fire through the pi5 speaker.",
+    const virtual = [
+      {
+        id: "_events",
+        meta: {
+          kind: "_events",
+          name: "Today's events",
+          description:
+            "HOA activities (auto-extracted) and manual events. Reminders fire through the pi5 speaker.",
+        },
+        layout: { tab: "Community", position: 5 },
+        fetched_at: null, error: null, data: null,
       },
-      layout: { tab: "Community", position: 5 },
-      fetched_at: null,
-      error: null,
-      data: null,
-    };
-    return [evRow, ...widgets];
+      {
+        id: "_subscriptions",
+        meta: {
+          kind: "_subscriptions",
+          name: "Alert rules",
+          description:
+            "Threshold subscriptions — 'if AQI > 100 → speak + telegram'. Fires on each widget refresh, cooldown-limited.",
+        },
+        layout: { tab: "Lists", position: 5 },
+        fetched_at: null, error: null, data: null,
+      },
+    ];
+    return [...virtual, ...widgets];
   }, [widgets]);
 
   const tabsAndGroups = useMemo(() => {
@@ -249,7 +261,7 @@ export default function LocalTab({ tzOffsetMinutes }) {
   }, [tabsAndGroups.tabs, activeSubTab]);
 
   const onMove = useCallback(async (widgetId, { delta, tab }) => {
-    if (widgetId === "_events") return; // virtual card, not server-side
+    if (widgetId.startsWith("_")) return; // virtual card, not server-side
     const current = (widgets || []).find((w) => w.id === widgetId);
     if (!current) return;
     const body = {};
@@ -300,27 +312,31 @@ export default function LocalTab({ tzOffsetMinutes }) {
         ))}
       </div>
       <div className="local-grid">
-        {widgetsInTab.map((w) => (
-          w.id === "_events" ? (
-            <div key="_events" className="panel widget-card">
-              <div className="widget-head">
-                <div className="widget-title">
-                  <h3 style={{ margin: 0 }}>{w.meta.name}</h3>
-                  <span
-                    className="info-icon"
-                    title={w.meta.description}
-                    aria-label="About"
-                  >ⓘ</span>
+        {widgetsInTab.map((w) => {
+          if (w.id === "_events" || w.id === "_subscriptions") {
+            const Inner = w.id === "_events" ? EventsWidget : SubscriptionsWidget;
+            return (
+              <div key={w.id} className="panel widget-card">
+                <div className="widget-head">
+                  <div className="widget-title">
+                    <h3 style={{ margin: 0 }}>{w.meta.name}</h3>
+                    <span
+                      className="info-icon"
+                      title={w.meta.description}
+                      aria-label="About"
+                    >ⓘ</span>
+                  </div>
+                  <div className="widget-head-meta">
+                    <span className="muted" style={{ fontSize: 11 }}>pinned</span>
+                  </div>
                 </div>
-                <div className="widget-head-meta">
-                  <span className="muted" style={{ fontSize: 11 }}>pinned</span>
+                <div className="widget-body">
+                  <Inner />
                 </div>
               </div>
-              <div className="widget-body">
-                <EventsWidget />
-              </div>
-            </div>
-          ) : (
+            );
+          }
+          return (
             <WidgetCard
               key={w.id}
               widget={w}
@@ -329,8 +345,8 @@ export default function LocalTab({ tzOffsetMinutes }) {
               allTabs={tabs}
               onMove={onMove}
             />
-          )
-        ))}
+          );
+        })}
       </div>
     </div>
   );

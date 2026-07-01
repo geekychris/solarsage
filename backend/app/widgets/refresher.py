@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Any
 
-from .base import Widget
+from .base import Widget, WidgetState
 from .registry import WidgetRegistry
 from .store import WidgetStore
 
@@ -37,8 +37,42 @@ async def _apply_sheets_read(
     return {**config, widget.sheets_list_field: rows}
 
 
+async def _post_refresh_hooks(
+    widget: Widget, data: Any, state: WidgetState | None,
+    subs: Any | None, mqtt: Any | None,
+) -> None:
+    """Fire the after-refresh side effects: subscription evaluation +
+    MQTT publish. Each is optional; failures are logged but don't
+    surface to the widget loop."""
+    if subs is not None:
+        try:
+            fired = await subs["evaluate_and_fire"](
+                subs["store"], widget.id, data,
+            )
+            if fired:
+                log.info(
+                    "widget %s: fired %d subscription(s)",
+                    widget.id, len(fired),
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("subscription eval for %s failed: %s", widget.id, exc)
+    if mqtt is not None and state is not None:
+        try:
+            await mqtt.publish_widget(widget, {
+                "fetched_at": state.fetched_at,
+                "data": state.data,
+                "error": state.error,
+            })
+        except Exception as exc:  # noqa: BLE001
+            log.warning("mqtt publish for %s failed: %s", widget.id, exc)
+
+
 async def _refresh_once(
-    widget: Widget, store: WidgetStore, sheets: Any | None = None,
+    widget: Widget,
+    store: WidgetStore,
+    sheets: Any | None = None,
+    subs: Any | None = None,
+    mqtt: Any | None = None,
 ) -> None:
     try:
         config = await store.get_config(widget.id)
@@ -55,8 +89,6 @@ async def _refresh_once(
         try:
             await store.record_error(widget.id, f"{exc.__class__.__name__}: {exc}")
         except Exception as exc2:  # noqa: BLE001
-            # Keep the loop alive even if the store itself is unhappy —
-            # the next tick will retry.
             log.error("widget %s: record_error failed: %s", widget.id, exc2)
         return
     try:
@@ -64,25 +96,38 @@ async def _refresh_once(
         log.info("widget %s refreshed", widget.id)
     except Exception as exc:  # noqa: BLE001
         log.error("widget %s: record_success failed: %s", widget.id, exc)
+    # Read back the freshly-stored state for the hooks so MQTT / subs
+    # see the same shape /api/widgets returns.
+    state = await store.get_state(widget.id)
+    await _post_refresh_hooks(widget, data, state, subs, mqtt)
 
 
 async def _widget_loop(
-    widget: Widget, store: WidgetStore, sheets: Any | None = None,
+    widget: Widget,
+    store: WidgetStore,
+    sheets: Any | None = None,
+    subs: Any | None = None,
+    mqtt: Any | None = None,
 ) -> None:
-    # First fetch is immediate but offset slightly so several widgets don't
-    # all hit external APIs simultaneously at boot.
     await asyncio.sleep(1)
     while True:
-        await _refresh_once(widget, store, sheets)
+        await _refresh_once(widget, store, sheets, subs, mqtt)
         await asyncio.sleep(max(60, widget.refresh_seconds))
 
 
 async def run_widget_refreshers(
-    registry: WidgetRegistry, store: WidgetStore, sheets: Any | None = None,
+    registry: WidgetRegistry,
+    store: WidgetStore,
+    sheets: Any | None = None,
+    subs: Any | None = None,
+    mqtt: Any | None = None,
 ) -> None:
-    """Top-level task: run one refresh loop per registered widget concurrently."""
+    """Top-level task: run one refresh loop per registered widget."""
     tasks = [
-        asyncio.create_task(_widget_loop(w, store, sheets), name=f"widget:{w.id}")
+        asyncio.create_task(
+            _widget_loop(w, store, sheets, subs, mqtt),
+            name=f"widget:{w.id}",
+        )
         for w in registry.all()
     ]
     if not tasks:
@@ -96,8 +141,12 @@ async def run_widget_refreshers(
 
 
 async def refresh_now(
-    widget: Widget, store: WidgetStore, sheets: Any | None = None,
+    widget: Widget,
+    store: WidgetStore,
+    sheets: Any | None = None,
+    subs: Any | None = None,
+    mqtt: Any | None = None,
 ) -> None:
     """Force an immediate refresh — used by the POST /api/widgets/{id}/refresh
     endpoint so a user can pull fresh data without waiting for the loop."""
-    await _refresh_once(widget, store, sheets)
+    await _refresh_once(widget, store, sheets, subs, mqtt)

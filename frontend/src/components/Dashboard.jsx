@@ -21,7 +21,7 @@ import LocalTab from "./LocalTab.jsx";
 
 const POLL_LIVE_MS = 15_000;
 
-export default function Dashboard({ session, onLoggedOut }) {
+export default function Dashboard({ session, onLoggedOut, onSwitchMobile }) {
   const [inverters, setInverters] = useState([]);
   const [selected, setSelected] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
@@ -117,6 +117,9 @@ export default function Dashboard({ session, onLoggedOut }) {
           {lastUpdate && <span>updated {lastUpdate.toLocaleTimeString()}</span>}
           <span>{session.username}</span>
           <button onClick={() => window.print()} title="Print or save as PDF" className="no-print">Print</button>
+          {onSwitchMobile && (
+            <button onClick={onSwitchMobile} title="Switch to touch/mobile view">📱 Mobile</button>
+          )}
           <button onClick={() => setSettingsOpen(true)}>Settings</button>
           <button onClick={() => logout(false)}>Sign out</button>
           <button

@@ -1403,6 +1403,54 @@ select, input {
 .translate-item.starred { background: rgba(255,209,102,0.08); border-left: 2px solid #ffd166; }
 .translate-item button { padding: 2px 5px; font-size: 12px; }
 
+/* Subscriptions */
+.subs { display: flex; flex-direction: column; gap: 6px; }
+.subs-head { display: flex; justify-content: space-between; align-items: center; }
+.subs-list { display: flex; flex-direction: column; gap: 4px; }
+.sub-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 6px;
+  padding: 6px 8px; border-radius: 4px;
+  background: rgba(255,255,255,0.03);
+  border-left: 3px solid #6cd1ff;
+}
+.sub-row.sub-disabled { border-left-color: #555; opacity: 0.6; }
+.sub-name { font-weight: 600; font-size: 13px; }
+.sub-body { min-width: 0; }
+.sub-actions { display: flex; gap: 3px; }
+.sub-actions button { padding: 2px 6px; font-size: 12px; }
+.sub-test-result {
+  margin-top: 2px; font-size: 11px;
+  padding: 2px 6px; background: rgba(111,220,140,0.1);
+  border-radius: 3px;
+}
+.sub-form {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px; border-radius: 6px;
+  background: rgba(108,209,255,0.05);
+  border: 1px solid rgba(108,209,255,0.2);
+}
+.sub-form-row { display: flex; gap: 6px; align-items: center; }
+.sub-form-row label {
+  width: 100px; font-size: 12px; color: var(--muted, #888);
+  text-transform: uppercase; letter-spacing: 0.3px;
+}
+.sub-form-row input, .sub-form-row select {
+  flex: 1; padding: 3px 6px; font-size: 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border, #2a2f37);
+  color: inherit; border-radius: 3px;
+}
+.sub-action-row {
+  display: grid; grid-template-columns: 90px 1fr auto auto; gap: 4px;
+  margin-top: 3px;
+}
+.sub-action-row input, .sub-action-row select {
+  padding: 3px 6px; font-size: 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border, #2a2f37);
+  color: inherit; border-radius: 3px;
+}
+
 /* Todo */
 .todo { display: flex; flex-direction: column; gap: 6px; }
 .todo-stats { display: flex; gap: 8px; align-items: center; font-size: 12px; }

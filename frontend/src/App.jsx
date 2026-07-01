@@ -1,16 +1,43 @@
 import React, { useEffect, useState } from "react";
 import Login from "./components/Login.jsx";
 import Dashboard from "./components/Dashboard.jsx";
+import MobileApp from "./components/MobileApp.jsx";
 import { api, getToken, setToken } from "./api.js";
+
+const MOBILE_KEY = "eg4.mobile";
+
+function resolveInitialMobile() {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  const q = params.get("view");
+  if (q === "mobile") return true;
+  if (q === "desktop") return false;
+  const stored = localStorage.getItem(MOBILE_KEY);
+  if (stored === "1") return true;
+  if (stored === "0") return false;
+  // Auto: touch-capable narrow viewport
+  const narrow = window.matchMedia("(max-width: 768px)").matches;
+  const touch = navigator.maxTouchPoints > 0;
+  return narrow && touch;
+}
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [bootChecked, setBootChecked] = useState(false);
+  const [mobile, setMobile] = useState(() => resolveInitialMobile());
+
+  const switchToMobile = () => {
+    setMobile(true);
+    localStorage.setItem(MOBILE_KEY, "1");
+  };
+  const switchToDesktop = () => {
+    setMobile(false);
+    localStorage.setItem(MOBILE_KEY, "0");
+  };
 
   useEffect(() => {
     async function check() {
       const t = getToken();
-      // 1. Try existing token first
       if (t) {
         try {
           const r = await api.inverters();
@@ -24,7 +51,6 @@ export default function App() {
           setToken(null);
         }
       }
-      // 2. Fall back to the auto-login session if creds are persisted
       try {
         const status = await api.authStatus();
         if (status.credentials_persisted && status.active_sessions > 0) {
@@ -48,5 +74,20 @@ export default function App() {
   if (!session) {
     return <Login onLoggedIn={(s) => setSession(s)} />;
   }
-  return <Dashboard session={session} onLoggedOut={() => setSession(null)} />;
+  if (mobile) {
+    return (
+      <MobileApp
+        session={session}
+        onLoggedOut={() => setSession(null)}
+        onExitMobile={switchToDesktop}
+      />
+    );
+  }
+  return (
+    <Dashboard
+      session={session}
+      onLoggedOut={() => setSession(null)}
+      onSwitchMobile={switchToMobile}
+    />
+  );
 }
