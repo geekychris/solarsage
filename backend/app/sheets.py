@@ -120,6 +120,28 @@ class SheetsSync:
             )
         return ws
 
+    def _ensure_tab_sync(
+        self, tab_name: str, field_order: list[str],
+    ) -> Any:
+        """Create the tab + write the header row if it doesn't exist."""
+        try:
+            return self._tab(tab_name)
+        except ValueError:
+            pass
+        ncols = max(6, len(field_order))
+        ws = self._sheet.add_worksheet(title=tab_name, rows=200, cols=ncols)
+        if field_order:
+            ws.update(values=[field_order], range_name="A1")
+        self._tabs[tab_name] = ws
+        log.info("sheets: created missing tab %r with headers %s",
+                 tab_name, field_order)
+        return ws
+
+    async def ensure_tab(
+        self, tab_name: str, field_order: list[str],
+    ) -> None:
+        await asyncio.to_thread(self._ensure_tab_sync, tab_name, field_order)
+
     # --- read ---------------------------------------------------------
 
     def _read_sync(
@@ -163,11 +185,11 @@ class SheetsSync:
     def _write_sync(
         self, tab: str, field_order: list[str], items: list[dict[str, Any]],
     ) -> None:
-        ws = self._tab(tab)
+        ws = self._ensure_tab_sync(tab, field_order)
         headers = [h.strip() for h in ws.row_values(1)]
         if not headers:
             # Populate header row on first write
-            ws.update("A1", [field_order])
+            ws.update(values=[field_order], range_name="A1")
             headers = field_order
 
         # Wipe everything from row 2 down (avoid leaving stale rows)

@@ -253,6 +253,17 @@ async def lifespan(app: FastAPI):
     log.info("auto-login background task started")
     alerts_task = asyncio.create_task(run_alerts(history))
     log.info("alerts watcher started")
+    if sheets is not None:
+        # Materialize any Sheets-backed widget tabs that don't exist yet.
+        for _w in widget_registry.all():
+            if _w.sheets_tab and _w.sheets_field_order:
+                try:
+                    await sheets.ensure_tab(_w.sheets_tab, _w.sheets_field_order)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning(
+                        "sheets: could not ensure tab %r for %s: %s",
+                        _w.sheets_tab, _w.id, exc,
+                    )
     widgets_task = asyncio.create_task(
         run_widget_refreshers(widget_registry, widget_store, sheets)
     )
