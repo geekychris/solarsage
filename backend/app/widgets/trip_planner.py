@@ -92,12 +92,12 @@ class TripPlannerWidget(Widget):
                 day_score -= 25
             days.append({
                 "date": d.get("date"),
-                "high": d.get("high"),
-                "feels_max": d.get("feels_max"),
+                "high": round(d["high"], 1) if d.get("high") is not None else None,
+                "feels_max": round(d["feels_max"], 1) if d.get("feels_max") is not None else None,
                 "cloud_mean_pct": d.get("cloud_mean_pct"),
                 "precip_prob": d.get("precip_prob"),
                 "is_holiday": is_holiday,
-                "score": max(0, day_score),
+                "score": max(0, round(day_score)),
             })
 
         total_min = None

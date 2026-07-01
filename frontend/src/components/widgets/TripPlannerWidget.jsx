@@ -46,7 +46,7 @@ export default function TripPlannerWidget({ data }) {
         {(data.days || []).map((d, i) => (
           <div key={i} className={`trip-day ${scoreClass(d.score)}`}>
             <div style={{ fontSize: 12 }}>{prettyDate(d.date)}</div>
-            <div className="trip-score">{d.score}</div>
+            <div className="trip-score">{Math.round(d.score || 0)}</div>
             <div className="muted" style={{ fontSize: 10 }}>
               {Math.round(d.high || 0)}° · ☁{Math.round(d.cloud_mean_pct || 0)}%
               {d.is_holiday && " · 🎉"}

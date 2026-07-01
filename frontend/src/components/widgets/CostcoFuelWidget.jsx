@@ -62,31 +62,45 @@ export default function CostcoFuelWidget({ data }) {
         )}
       </div>
 
-      {stations.length > 1 && (
-        <details className="fuel-details">
-          <summary className="muted" style={{ fontSize: 11, cursor: "pointer" }}>
-            {stations.length} stations within {stations[0] ? "radius" : ""}
+      {(data.pemex_locations || []).map((loc) => (
+        <details key={loc.name} className="fuel-details" open>
+          <summary className="muted" style={{ fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
+            {loc.name} — {loc.stations?.length || 0} stations within {loc.radius_km} km
           </summary>
           <table className="fuel-stations">
             <thead>
               <tr>
-                <th>Station</th><th>km</th><th>reg</th><th>prem</th><th>diesel</th>
+                <th>Where</th><th>Dist</th><th>Regular</th><th>Premium</th><th>Diesel</th>
               </tr>
             </thead>
             <tbody>
-              {stations.map((s) => (
-                <tr key={s.place_id}>
-                  <td>{s.name.slice(0, 34)}</td>
-                  <td>{s.distance_km}</td>
-                  <td>{s.regular_mxn_l ?? "—"}</td>
-                  <td>{s.premium_mxn_l ?? "—"}</td>
-                  <td>{s.diesel_mxn_l  ?? "—"}</td>
-                </tr>
-              ))}
+              {(loc.stations || []).map((s) => {
+                const addr = s.address || {};
+                const where = addr.road || addr.neighbourhood || s.name.slice(0, 28);
+                const sub = [addr.neighbourhood, addr.town]
+                  .filter(Boolean).join(", ");
+                return (
+                  <tr key={s.place_id}>
+                    <td>
+                      <a href={s.maps_url} target="_blank" rel="noreferrer"
+                         className="fuel-station-link">
+                        {where}
+                      </a>
+                      {sub && (
+                        <div className="muted" style={{ fontSize: 10 }}>{sub}</div>
+                      )}
+                    </td>
+                    <td>{s.distance_km}<span className="muted"> {s.direction}</span></td>
+                    <td>{s.regular_mxn_l ?? "—"}</td>
+                    <td>{s.premium_mxn_l ?? "—"}</td>
+                    <td>{s.diesel_mxn_l  ?? "—"}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </details>
-      )}
+      ))}
 
       {/* Costco Calexico — manual */}
       <div className="fuel-source">

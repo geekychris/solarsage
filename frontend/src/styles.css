@@ -1313,6 +1313,8 @@ select, input {
   border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 .fuel-stations th { font-weight: 600; color: var(--muted, #888); }
+.fuel-station-link { color: inherit; text-decoration: underline dotted rgba(255,255,255,0.2); }
+.fuel-station-link:hover { text-decoration: underline; color: #6cd1ff; }
 
 /* Consumption YoY */
 .yoy { display: flex; flex-direction: column; gap: 6px; }
