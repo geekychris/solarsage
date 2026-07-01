@@ -55,13 +55,20 @@ works inside.
 | **Events + TTS reminders** | Auto-extracts events from the El Dorado Ranch HOA weekly PDF, schedules configurable reminders, speaks them through a local TTS service ("Movie Night starts in 60 minutes"). |
 | **Google Sheets sync** | User-editable lists (contacts, shopping, todo, border crossings, bookmarks) live in a Google Sheets workbook — edit from any device, dashboard picks it up. |
 | **Persistent news archive + translation** | RSS feed items stored in SQLite; headlines translated on-demand via MyMemory and cached forever. |
+| **Threshold subscriptions** | Declarative "if X then TTS + Telegram" rules per widget. Edge-triggered, cooldown-limited, per-rule test button. |
+| **MQTT + Home Assistant discovery** | Every widget publishes to your MQTT broker with an HA discovery config — sensors appear in Home Assistant automatically. |
+| **Mobile / touch view** | Single-column stream + bottom tab bar + 48-px targets. Auto-detects touch devices; add to iOS home screen for a PWA-lite. |
 
 ## Documentation
 
 * [`docs/INSTALLATION.md`](docs/INSTALLATION.md) — install + configuration
+* [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — Pi setup, systemd, apache, backups
 * [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the pieces fit together
 * [`docs/WIDGETS.md`](docs/WIDGETS.md) — writing your own widget (backend + frontend renderer)
 * [`docs/SHEETS.md`](docs/SHEETS.md) — Google Sheets integration setup
+* [`docs/NOTIFICATIONS.md`](docs/NOTIFICATIONS.md) — subscriptions, channels, HA notify wiring
+* [`docs/MQTT.md`](docs/MQTT.md) — MQTT publish + HA MQTT discovery
+* [`docs/MOBILE.md`](docs/MOBILE.md) — mobile / touch layout + add-to-home-screen
 * [`docs/API.md`](docs/API.md) — REST + MCP reference (auto-generated OpenAPI at `/docs`)
 
 ## UI walkthrough

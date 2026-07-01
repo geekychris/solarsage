@@ -183,3 +183,12 @@ All in `backend/.env`:
 | `GOOGLE_APPLICATION_CREDENTIALS` | (optional) | Path to Sheets service-account JSON |
 | `SOLARSAGE_SHEET_ID` | (optional) | Google Sheets workbook ID |
 | `TTS_URL` | `http://localhost:5006/say` | Local TTS service |
+| `HA_URL` | (optional) | Home Assistant base URL for the notify layer, e.g. `http://homeassistant.local:8123` |
+| `HA_TOKEN` | (optional) | HA long-lived access token — see [NOTIFICATIONS.md](NOTIFICATIONS.md) |
+| `NOTIFY_TELEGRAM_SERVICE` | `notify.telegram` | HA service the `telegram` action type calls (`telegram_bot.send_message`, `notify.persistent_notification`, `notify.alexa_media_everywhere`, …) |
+| `NOTIFY_TELEGRAM_TARGET` | (optional) | Default target for the HA service (chat_id, list of chat_ids). Comma-separated for a list. |
+| `MQTT_BROKER` | (optional) | MQTT broker host. Publisher stays dormant if unset. See [MQTT.md](MQTT.md). |
+| `MQTT_PORT` | `1883` | MQTT broker port |
+| `MQTT_USER` / `MQTT_PASS` | (optional) | Broker credentials |
+| `MQTT_BASE_TOPIC` | `solarsage` | Root topic for widget state |
+| `MQTT_DISCOVERY_PREFIX` | `homeassistant` | HA MQTT-discovery prefix |

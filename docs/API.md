@@ -72,6 +72,16 @@ The endpoints below are the highlights. Authentication is either:
 | `GET /api/news/history?widget_id=<id>&limit=100&translate_to=en` | Full archive with cached translations |
 | `POST /api/news/translate` | Batch-translate item IDs; caches to `translations` table |
 
+## Notifications & subscriptions
+
+| Endpoint | Description |
+|---|---|
+| `POST /api/notify/test` | Fire one raw action for testing. Body: `{"type":"telegram","text":"hi","title":"optional"}`. Returns `{ok, detail}`. |
+| `GET /api/subscriptions` | List all rules with last-fired metadata |
+| `POST /api/subscriptions` | Create / update. Send `id` to update. Rule shape in [NOTIFICATIONS.md](NOTIFICATIONS.md). |
+| `DELETE /api/subscriptions/{id}` | Delete |
+| `POST /api/subscriptions/{id}/test` | Fire the rule's actions **now** — bypass condition + cooldown. Renders `message` template against the widget's current data. |
+
 ## Translations
 
 | Endpoint | Description |
