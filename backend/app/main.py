@@ -2361,6 +2361,57 @@ async def put_rotation(
     return {"config": body}
 
 
+# ---------------------------------------------------------------------------
+# Solar-vitals calibration — write a measured wattage back to an
+# appliance in the widget's config. Called by the frontend calibration
+# modal after the user records "baseline" and "on" load readings and
+# clicks Save (frontend supplies the delta).
+# ---------------------------------------------------------------------------
+
+
+@app.post(
+    "/api/widgets/solar_vitals/calibrate",
+    tags=["widgets"],
+    summary="Save a measured wattage for a solar_vitals appliance",
+)
+async def calibrate_solar_vitals(
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Body: ``{"name": "AC — main", "watts": 3200}``. Updates that
+    appliance's ``watts`` in the widget's config. If the appliance
+    doesn't exist yet, it's added."""
+    name = str(body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name required")
+    try:
+        watts = float(body.get("watts"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="watts must be numeric")
+    if watts < 0:
+        raise HTTPException(status_code=400, detail="watts must be non-negative")
+
+    w = _require_widget("solar_vitals")
+    config = await widget_store.get_config(w.id) or dict(w.default_config)
+    appliances = list(config.get("appliances") or [])
+    hit = False
+    for a in appliances:
+        if str(a.get("name") or "").strip().lower() == name.lower():
+            a["watts"] = round(watts)
+            a["calibrated_at"] = datetime.now(timezone.utc).isoformat()
+            hit = True
+            break
+    if not hit:
+        appliances.append({
+            "name": name, "watts": round(watts), "on": False,
+            "calibrated_at": datetime.now(timezone.utc).isoformat(),
+        })
+    config["appliances"] = appliances
+    await widget_store.put_config(w.id, config)
+    await widget_refresh_now(w, widget_store, sheets, _SUBS_BUNDLE, mqtt)
+    return {"ok": True, "appliances": appliances}
+
+
 @app.post(
     "/api/notify/test",
     tags=["notify"],

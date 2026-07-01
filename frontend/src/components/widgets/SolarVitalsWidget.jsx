@@ -174,12 +174,115 @@ function FlowDiagram({ data }) {
   );
 }
 
-// --------- Appliance quick-toggle -------------------------------------
+// --------- Calibration modal ------------------------------------------
+
+function CalibrationModal({ applianceName, currentLoadKw, onClose, onSaved }) {
+  const [baseline, setBaseline] = useState(null);
+  const [withOn, setWithOn] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const delta = baseline != null && withOn != null
+    ? Math.max(0, withOn - baseline)
+    : null;
+
+  const save = async () => {
+    if (delta == null) return;
+    setBusy(true);
+    try {
+      await api.calibrateSolarVitals(applianceName, Math.round(delta * 1000));
+      onSaved();
+      onClose();
+    } catch (ex) {
+      setErr(ex.message || "save failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>Calibrate: {applianceName}</h3>
+        <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+          Watches the actual house load and computes this appliance's
+          consumption from the difference.
+        </div>
+        <div className="sv-cal-live">
+          <span className="muted">Live load:</span>
+          <strong>{currentLoadKw != null ? currentLoadKw.toFixed(2) : "—"} kW</strong>
+        </div>
+        <ol className="sv-cal-steps">
+          <li className={baseline != null ? "sv-cal-done" : "sv-cal-current"}>
+            <strong>Turn OFF</strong> the appliance if it's on. Wait for the
+            load to settle.
+            <br />
+            <button
+              onClick={() => setBaseline(currentLoadKw)}
+              disabled={busy || currentLoadKw == null}
+              className="primary"
+            >
+              Record baseline
+            </button>
+            {baseline != null && (
+              <span className="muted"> · baseline = {baseline.toFixed(2)} kW</span>
+            )}
+          </li>
+          <li className={
+            baseline == null ? "" :
+            withOn != null ? "sv-cal-done" : "sv-cal-current"
+          }>
+            <strong>Turn ON</strong> the appliance. Wait ~30s for the load
+            to stabilise.
+            <br />
+            <button
+              onClick={() => setWithOn(currentLoadKw)}
+              disabled={busy || baseline == null || currentLoadKw == null}
+              className="primary"
+            >
+              Record with-on
+            </button>
+            {withOn != null && (
+              <span className="muted"> · with-on = {withOn.toFixed(2)} kW</span>
+            )}
+          </li>
+          {delta != null && (
+            <li className="sv-cal-current">
+              Delta: <strong>{delta.toFixed(2)} kW</strong>{" "}
+              ({Math.round(delta * 1000)} W)
+              <br />
+              <button
+                onClick={save}
+                disabled={busy || delta === 0}
+                className="primary"
+              >
+                {busy ? "Saving…" : `Save ${Math.round(delta * 1000)} W`}
+              </button>
+            </li>
+          )}
+        </ol>
+        {err && <div className="error-inline">{err}</div>}
+        <div className="modal-actions">
+          <button onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --------- Appliance quick-toggle + calibration entry ---------------
 
 function ApplianceGrid({ data, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [saveErr, setSaveErr] = useState("");
-  const toggle = useCallback(async (name) => {
+  const [calibrating, setCalibrating] = useState(null);
+
+  // Prefer the widget's resolved appliance list (with HA state
+  // baked in). Falls back to config for backwards compat.
+  const appliances = data?.load?.appliances || [];
+  const currentLoadKw = data?.load?.kw ?? null;
+
+  const toggleManual = useCallback(async (name) => {
     setBusy(true);
     setSaveErr("");
     try {
@@ -196,38 +299,49 @@ function ApplianceGrid({ data, onChanged }) {
     }
   }, [onChanged]);
 
-  // We render the buttons from a fresh config load so we always show
-  // the up-to-date appliance list (including any user additions).
-  const [cfgAppliances, setCfgAppliances] = useState(null);
-  React.useEffect(() => {
-    let cancelled = false;
-    api.getWidgetConfig("solar_vitals").then((r) => {
-      if (!cancelled) setCfgAppliances(r.config?.appliances || []);
-    }).catch(() => setCfgAppliances([]));
-    return () => { cancelled = true; };
-  }, [data]);
-
-  if (!cfgAppliances) return null;
   return (
     <div>
       <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
-        What's on right now? (guess — no feedback from Alexa routines)
+        What's on right now? Tap to toggle manual. HA-linked entries
+        auto-update from Home Assistant.
       </div>
       <div className="sv-appliances">
-        {cfgAppliances.map((a) => (
-          <button
-            key={a.name}
-            onClick={() => toggle(a.name)}
-            disabled={busy}
-            className={`sv-appliance ${a.on ? "sv-app-on" : ""}`}
-            title={`${a.watts} W typical`}
-          >
-            {a.name}
-            <span className="muted"> · {(a.watts / 1000).toFixed(1)} kW</span>
-          </button>
-        ))}
+        {appliances.map((a) => {
+          const haLabel = a.ha_entity_id
+            ? `HA: ${a.ha_state || "unavailable"}`
+            : "manual";
+          return (
+            <div key={a.name}
+                 className={`sv-appliance ${a.on ? "sv-app-on" : ""}`}
+                 title={`${a.watts} W · ${haLabel}`}>
+              <button
+                onClick={() => a.ha_entity_id ? null : toggleManual(a.name)}
+                disabled={busy || !!a.ha_entity_id}
+                className="sv-app-toggle"
+                title={a.ha_entity_id ? "HA-controlled — override in HA" : "Toggle manual"}
+              >
+                {a.name}
+                <span className="muted"> · {(a.watts / 1000).toFixed(1)} kW</span>
+                {a.ha_entity_id && <span className="sv-app-ha">🏠</span>}
+              </button>
+              <button
+                onClick={() => setCalibrating(a.name)}
+                title="Calibrate — measure actual wattage"
+                className="sv-app-cal"
+              >⚙</button>
+            </div>
+          );
+        })}
       </div>
       {saveErr && <div className="error-inline">{saveErr}</div>}
+      {calibrating && (
+        <CalibrationModal
+          applianceName={calibrating}
+          currentLoadKw={currentLoadKw}
+          onClose={() => setCalibrating(null)}
+          onSaved={() => onChanged && onChanged()}
+        />
+      )}
     </div>
   );
 }

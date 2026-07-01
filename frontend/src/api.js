@@ -286,4 +286,10 @@ export const api = {
   getRotation: () => request("/api/rotation"),
   putRotation: (config) =>
     request("/api/rotation", { method: "PUT", body: config }),
+  // Solar vitals calibration + config
+  calibrateSolarVitals: (name, watts) =>
+    request("/api/widgets/solar_vitals/calibrate", {
+      method: "POST",
+      body: { name, watts },
+    }),
 };

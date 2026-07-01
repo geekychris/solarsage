@@ -25,9 +25,57 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import aiohttp
 import aiosqlite
 
 from .base import Widget
+
+DEFAULT_ON_STATES = ("on", "cool", "heat", "heat_cool", "auto",
+                     "fan_only", "playing", "true", "yes")
+
+
+async def _resolve_ha_state(
+    http: aiohttp.ClientSession, ha_url: str, ha_token: str,
+    entity_id: str,
+) -> str | None:
+    """Return the current state of an HA entity, or None on error."""
+    try:
+        async with http.get(
+            f"{ha_url}/api/states/{entity_id}",
+            headers={"Authorization": f"Bearer {ha_token}"},
+            timeout=10,
+        ) as r:
+            if r.status != 200:
+                return None
+            payload = await r.json()
+            return str(payload.get("state") or "").lower()
+    except Exception:
+        return None
+
+
+def _appliance_is_on(state: str | None, on_states: list[str]) -> bool:
+    """Match HA state against the appliance's on_states list."""
+    if state is None or state in ("unavailable", "unknown", ""):
+        return False
+    on_states = [s.lower() for s in (on_states or DEFAULT_ON_STATES)]
+    # Numeric threshold: "watts>=50" or ">=100"
+    try:
+        st_num = float(state)
+    except (ValueError, TypeError):
+        st_num = None
+    for rule in on_states:
+        rule = rule.strip()
+        if rule.startswith(("watts>=", ">=")):
+            threshold = float(rule.split(">=")[-1])
+            if st_num is not None and st_num >= threshold:
+                return True
+        elif rule.startswith(("watts>", ">")):
+            threshold = float(rule.split(">")[-1])
+            if st_num is not None and st_num > threshold:
+                return True
+        elif rule == state.lower():
+            return True
+    return False
 
 
 SOC_CANDIDATES  = ("soc", "unit0_soc", "batterySoc")
@@ -192,13 +240,18 @@ class SolarVitalsWidget(Widget):
         "serial": None,
         "cut_back_soc": 30,
         "battery_nominal_voltage": 51.2,
+        # Each appliance may optionally link to a Home Assistant entity
+        # (any domain — switch, sensor, binary_sensor, climate, etc.).
+        # When ha_entity_id is set, the widget reads HA state on every
+        # refresh and marks the appliance "on" automatically. When
+        # blank the appliance is a manual toggle (tap on the card).
+        #
+        # ha_on_states lets you customise what counts as "on" —
+        # defaults to any of ("on", "cool", "heat", "auto", "fan_only",
+        # "playing"). For a numeric sensor (e.g. a power meter), set
+        # ha_on_states=["watts>=50"] to interpret 50+ W as on.
         "appliances": [
             {"name": "Fridge",       "watts": 200,  "on": True},
-            {"name": "AC — main",    "watts": 3500, "on": False},
-            {"name": "AC — bedroom", "watts": 1500, "on": False},
-            {"name": "Water heater", "watts": 4000, "on": False},
-            {"name": "Pool pump",    "watts": 1000, "on": False},
-            {"name": "EV charge",    "watts": 7000, "on": False},
             {"name": "Baseline",     "watts": 400,  "on": True},
         ],
     }
@@ -320,10 +373,42 @@ class SolarVitalsWidget(Widget):
 
         # -------- Load breakdown --------
         appliances_cfg = list(config.get("appliances") or [])
-        on_list = [
-            {"name": a.get("name", "?"), "watts": float(a.get("watts", 0) or 0)}
-            for a in appliances_cfg if a.get("on")
-        ]
+
+        # For each appliance with an HA entity, ask HA what state it's
+        # in. That answer overrides the manual `on` field. Cache-of-one:
+        # gather all entities in a single aiohttp session.
+        ha_url = os.getenv("HA_URL", "").rstrip("/")
+        ha_token = os.getenv("HA_TOKEN")
+        ha_states: dict[str, str | None] = {}
+        if ha_url and ha_token:
+            targets = [
+                a["ha_entity_id"] for a in appliances_cfg
+                if a.get("ha_entity_id")
+            ]
+            if targets:
+                async with aiohttp.ClientSession() as http:
+                    for eid in targets:
+                        ha_states[eid] = await _resolve_ha_state(
+                            http, ha_url, ha_token, eid,
+                        )
+
+        on_list = []
+        for a in appliances_cfg:
+            watts = float(a.get("watts", 0) or 0)
+            name = a.get("name", "?")
+            eid = a.get("ha_entity_id") or ""
+            source = "manual"
+            is_on = bool(a.get("on"))
+            if eid:
+                st = ha_states.get(eid)
+                is_on = _appliance_is_on(st, a.get("ha_on_states") or [])
+                source = f"ha:{eid}={st or 'unavailable'}"
+            if is_on:
+                on_list.append({
+                    "name": name, "watts": watts,
+                    "ha_entity_id": eid or None,
+                    "source": source,
+                })
         sum_est_w = sum(a["watts"] for a in on_list)
         breakdown = list(on_list)
         if load_v is not None:
@@ -362,6 +447,28 @@ class SolarVitalsWidget(Widget):
                     {**b, "kw": round(b["watts"] / 1000, 2)} for b in breakdown
                 ],
                 "estimated_on_kw": round(sum_est_w / 1000, 2),
+                # Full appliance list with resolved on-state (so the UI
+                # can show every appliance's button + which are HA-
+                # controlled vs manual). Empty when no appliances
+                # configured.
+                "appliances": [
+                    {
+                        "name": a.get("name", "?"),
+                        "watts": float(a.get("watts", 0) or 0),
+                        "manual_on": bool(a.get("on")),
+                        "ha_entity_id": a.get("ha_entity_id") or None,
+                        "ha_state": ha_states.get(a.get("ha_entity_id") or ""),
+                        "on": next(
+                            (True for o in on_list if o["name"] == a.get("name")),
+                            False,
+                        ),
+                        "source": (
+                            f"ha:{a['ha_entity_id']}"
+                            if a.get("ha_entity_id") else "manual"
+                        ),
+                    }
+                    for a in appliances_cfg
+                ],
             },
             "battery_flow": {
                 "charge_kw":    round(charge_kw, 2),
