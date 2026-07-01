@@ -1451,6 +1451,82 @@ select, input {
   color: inherit; border-radius: 3px;
 }
 
+/* --- Mobile app --- */
+.m-app {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  background: var(--bg, #0e1116);
+}
+.m-header {
+  position: sticky; top: 0; z-index: 20;
+  display: grid; grid-template-columns: auto 1fr auto;
+  gap: 10px; padding: 10px 14px;
+  background: var(--panel, #181c22);
+  border-bottom: 1px solid var(--border, #2a2f37);
+}
+.m-brand { font-weight: 700; font-size: 14px; color: #6cd1ff; align-self: center; }
+.m-tab-label {
+  text-align: center; font-size: 14px; font-weight: 600;
+  align-self: center;
+}
+.m-menu-btn {
+  padding: 4px 10px; background: none;
+  border: 1px solid var(--border, #2a2f37); border-radius: 6px;
+  color: inherit; font-size: 16px;
+}
+.m-main {
+  flex: 1;
+  padding: 10px;
+  display: flex; flex-direction: column; gap: 10px;
+  padding-bottom: 80px;
+}
+.m-card {
+  background: var(--panel, #181c22);
+  border: 1px solid var(--border, #2a2f37);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.m-card-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+  min-height: 48px;
+}
+.m-card-title { font-weight: 600; font-size: 15px; }
+.m-card-toggle { color: var(--muted, #888); font-size: 16px; }
+.m-card-body { padding: 6px 14px 14px; }
+.m-tabbar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+  display: flex; overflow-x: auto;
+  background: var(--panel, #181c22);
+  border-top: 1px solid var(--border, #2a2f37);
+  padding: 6px 4px;
+  scrollbar-width: none;
+}
+.m-tabbar::-webkit-scrollbar { display: none; }
+.m-tab {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  min-width: 60px;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.m-tab.active {
+  background: rgba(108,209,255,0.15);
+  color: #6cd1ff;
+  font-weight: 600;
+}
+.m-loading, .m-error {
+  padding: 40px 20px; text-align: center;
+  color: var(--muted, #888);
+}
+.m-error { color: #ef6f6c; }
+
 /* Todo */
 .todo { display: flex; flex-direction: column; gap: 6px; }
 .todo-stats { display: flex; gap: 8px; align-items: center; font-size: 12px; }
