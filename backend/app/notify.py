@@ -34,14 +34,21 @@ async def _telegram(
     text: str,
     *,
     service: str | None = None,
-    target: str | list[str] | None = None,
+    target: str | list[str] | int | list[int] | None = None,
     title: str | None = None,
     **_,
 ) -> dict[str, Any]:
-    """POST to Home Assistant's notify service.
+    """POST to a Home Assistant service.
 
-    ``service`` defaults to ``notify.telegram``. Set ``NOTIFY_TELEGRAM_SERVICE``
-    to override globally (e.g. ``notify.mobile_app_chris_iphone``).
+    ``service`` defaults to ``$NOTIFY_TELEGRAM_SERVICE`` (fallback
+    ``notify.telegram``). Common choices:
+
+    * ``notify.<name>``  — HA notify integrations (persistent_notification,
+      alexa_media_*, mobile_app_*, …). Body: ``{message, title?, target?}``.
+    * ``telegram_bot.send_message`` — the direct Telegram-integration
+      service. Body: ``{message, title?, target?}`` where ``target`` is
+      the chat_id (int) — comes from ``$NOTIFY_TELEGRAM_TARGET`` when
+      not passed per-action.
     """
     ha_url = os.getenv("HA_URL", "").rstrip("/")
     ha_token = os.getenv("HA_TOKEN")
@@ -55,10 +62,24 @@ async def _telegram(
     if not domain or not name:
         return {"ok": False, "detail": f"invalid service: {service!r}"}
 
+    if target is None:
+        env_target = os.getenv("NOTIFY_TELEGRAM_TARGET")
+        if env_target:
+            # Comma-separated → list; single value → int if numeric
+            if "," in env_target:
+                target = [
+                    int(t) if t.strip().lstrip("-").isdigit() else t.strip()
+                    for t in env_target.split(",")
+                ]
+            elif env_target.lstrip("-").isdigit():
+                target = int(env_target)
+            else:
+                target = env_target
+
     body: dict[str, Any] = {"message": text}
     if title:
         body["title"] = title
-    if target:
+    if target is not None:
         body["target"] = target
 
     url = f"{ha_url}/api/services/{domain}/{name}"
