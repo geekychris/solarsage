@@ -23,6 +23,17 @@ import ReservationsWidget from "./widgets/ReservationsWidget.jsx";
 import NewsWidget from "./widgets/NewsWidget.jsx";
 import PropertyModeWidget from "./widgets/PropertyModeWidget.jsx";
 import TripPlannerWidget from "./widgets/TripPlannerWidget.jsx";
+import PropertyTaxWidget from "./widgets/PropertyTaxWidget.jsx";
+import ReturnCountdownWidget from "./widgets/ReturnCountdownWidget.jsx";
+import WhaleSeasonWidget from "./widgets/WhaleSeasonWidget.jsx";
+import SeaTempWidget from "./widgets/SeaTempWidget.jsx";
+import BajaRacesWidget from "./widgets/BajaRacesWidget.jsx";
+import ContactsWidget from "./widgets/ContactsWidget.jsx";
+import ShoppingListWidget from "./widgets/ShoppingListWidget.jsx";
+import BorderLogWidget from "./widgets/BorderLogWidget.jsx";
+import SpanishWidget from "./widgets/SpanishWidget.jsx";
+import CostcoFuelWidget from "./widgets/CostcoFuelWidget.jsx";
+import ConsumptionYoYWidget from "./widgets/ConsumptionYoYWidget.jsx";
 import WidgetSettings from "./WidgetSettings.jsx";
 
 const RENDERERS = {
@@ -48,6 +59,17 @@ const RENDERERS = {
   news: NewsWidget,
   property_mode: PropertyModeWidget,
   trip_planner: TripPlannerWidget,
+  property_tax: PropertyTaxWidget,
+  return_countdown: ReturnCountdownWidget,
+  whale_season: WhaleSeasonWidget,
+  sea_temp: SeaTempWidget,
+  baja_races: BajaRacesWidget,
+  contacts: ContactsWidget,
+  shopping_list: ShoppingListWidget,
+  border_log: BorderLogWidget,
+  spanish: SpanishWidget,
+  costco_fuel: CostcoFuelWidget,
+  consumption_yoy: ConsumptionYoYWidget,
 };
 
 // Stable order for subtabs when more than one is present.

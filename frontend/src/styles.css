@@ -1138,6 +1138,243 @@ select, input {
 .trip-ok    { border-bottom-color: #888; }
 .trip-bad   { border-bottom-color: #ef6f6c; opacity: 0.7; }
 
+/* Property tax */
+.property-tax { display: flex; flex-direction: column; }
+.ptax-status {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 15px;
+  text-align: center;
+}
+.ptax-status.paid     { background: rgba(111,220,140,0.15); color: #6fdc8c; }
+.ptax-status.upcoming { background: rgba(108,209,255,0.15); color: #6cd1ff; }
+.ptax-status.overdue  { background: rgba(239,111,108,0.15); color: #ef6f6c; }
+.ptax-btn {
+  padding: 4px 8px;
+  background: rgba(108,209,255,0.15);
+  color: #6cd1ff;
+  border: 1px solid rgba(108,209,255,0.4);
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+/* Return countdown */
+.return-count { text-align: center; }
+.return-days { font-size: 48px; font-weight: 800; line-height: 1; color: #6cd1ff; }
+
+/* Whale season */
+.whale { padding: 8px; border-radius: 6px; }
+.whale.whale-open   { background: rgba(108,209,255,0.08); border-left: 4px solid #6cd1ff; }
+.whale.whale-closed { background: rgba(255,255,255,0.03); border-left: 4px solid #888; }
+.whale-big { font-size: 20px; font-weight: 700; }
+
+/* Sea temp */
+.sea-temp { display: flex; flex-direction: column; gap: 8px; }
+.sea-temp-now {
+  display: flex; justify-content: space-between;
+  padding: 8px; border-radius: 6px;
+  background: rgba(108,209,255,0.06);
+  border: 1px solid rgba(108,209,255,0.2);
+}
+.sea-big { font-size: 28px; font-weight: 800; color: #6cd1ff; }
+.sea-days {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px;
+}
+.sea-day {
+  text-align: center; padding: 4px; border-radius: 4px;
+  background: rgba(255,255,255,0.03); font-size: 11px;
+}
+
+/* Baja races */
+.races { display: flex; flex-direction: column; gap: 6px; }
+.race-row {
+  padding: 6px 8px; border-radius: 4px;
+  background: rgba(255,255,255,0.03);
+  border-left: 3px solid transparent;
+}
+.race-row.race-sf { border-left-color: #ffd166; }
+.race-row.ongoing { background: rgba(255,209,102,0.1); }
+.race-title { font-size: 13px; font-weight: 600; }
+.race-star { color: #ffd166; margin-right: 4px; }
+
+/* Costco fuel */
+.fuel { display: flex; flex-direction: column; gap: 8px; }
+.fuel-row {
+  display: flex; justify-content: space-between;
+  padding: 8px; border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+}
+.fuel-big { font-size: 20px; font-weight: 700; }
+.fuel-delta {
+  padding: 6px 10px; border-radius: 4px;
+  font-weight: 600; text-align: center;
+}
+.fuel-delta.positive { background: rgba(111,220,140,0.15); color: #6fdc8c; }
+.fuel-delta.negative { background: rgba(239,111,108,0.15); color: #ef6f6c; }
+
+/* Consumption YoY */
+.yoy { display: flex; flex-direction: column; gap: 6px; }
+.yoy-row {
+  display: flex; justify-content: space-between;
+  padding: 6px 8px; border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+}
+.yoy-big { font-size: 18px; font-weight: 700; }
+.yoy-delta {
+  padding: 4px 10px; border-radius: 4px;
+  font-weight: 600; text-align: center;
+}
+.yoy-delta.yoy-up   { background: rgba(239,111,108,0.15); color: #ef6f6c; }
+.yoy-delta.yoy-down { background: rgba(111,220,140,0.15); color: #6fdc8c; }
+
+/* Contacts */
+.contacts { display: flex; flex-direction: column; gap: 6px; }
+.contacts-toolbar { display: flex; gap: 6px; }
+.contacts-toolbar input { flex: 1; padding: 4px 8px; }
+.contact-row {
+  display: grid; grid-template-columns: 1fr auto;
+  padding: 6px 8px; border-radius: 4px;
+  background: rgba(255,255,255,0.03);
+  border-left: 3px solid transparent;
+}
+.contact-row.loc-mx { border-left-color: #6fdc8c; }
+.contact-row.loc-us { border-left-color: #6cd1ff; }
+.contact-name { font-weight: 600; }
+.contact-loc {
+  font-size: 10px; margin-left: 6px; padding: 1px 4px;
+  border-radius: 3px; background: rgba(255,255,255,0.1);
+}
+.contact-detail { display: block; font-size: 12px; color: #6cd1ff; }
+.contact-tags { display: flex; gap: 3px; margin-top: 2px; }
+.contact-tag {
+  font-size: 10px; padding: 1px 5px; border-radius: 8px;
+  background: rgba(108,209,255,0.15); color: #6cd1ff;
+}
+.contact-notes-toggle {
+  font-size: 11px; padding: 1px 5px; margin-top: 2px;
+  background: none; border: 1px dashed var(--border, #2a2f37);
+  color: var(--muted, #888); border-radius: 3px;
+}
+.contact-form {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px; border-radius: 6px;
+  background: rgba(108,209,255,0.05);
+  border: 1px solid rgba(108,209,255,0.2);
+}
+.contact-form input, .contact-form select, .contact-form textarea {
+  padding: 3px 6px; font-size: 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border, #2a2f37);
+  color: inherit; border-radius: 3px;
+}
+.contact-actions { display: flex; gap: 4px; }
+.contact-actions button { padding: 2px 6px; font-size: 12px; }
+
+/* Shopping list */
+.shopping { display: flex; flex-direction: column; gap: 6px; }
+.shopping-add { display: flex; gap: 4px; }
+.shopping-add input { flex: 1; padding: 4px 8px; }
+.shopping-item {
+  display: grid; grid-template-columns: auto 1fr auto auto; gap: 6px;
+  align-items: center; padding: 3px 6px; border-radius: 3px;
+  background: rgba(255,255,255,0.02); font-size: 13px;
+}
+.shopping-item.checked { opacity: 0.5; }
+.shopping-item.checked .shopping-text { text-decoration: line-through; }
+.shopping-cat {
+  font-size: 10px; padding: 1px 5px;
+  background: rgba(108,209,255,0.15); color: #6cd1ff;
+  border-radius: 8px;
+}
+.shopping-clear {
+  align-self: flex-end; padding: 3px 8px; font-size: 12px;
+}
+
+/* Border log */
+.border-log { display: flex; flex-direction: column; gap: 6px; }
+.border-log-stats {
+  display: flex; gap: 6px; font-size: 12px; align-items: center;
+}
+.border-log-form {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px; border-radius: 6px;
+  background: rgba(108,209,255,0.05);
+  border: 1px solid rgba(108,209,255,0.2);
+}
+.border-log-form input, .border-log-form select, .border-log-form textarea {
+  padding: 3px 6px; font-size: 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border, #2a2f37); color: inherit; border-radius: 3px;
+}
+.border-log-row {
+  display: grid; grid-template-columns: 90px 60px 1fr auto; gap: 6px;
+  align-items: center; padding: 4px 6px; border-radius: 4px;
+  background: rgba(255,255,255,0.03);
+  border-left: 3px solid transparent;
+}
+.border-log-row.dir-us_to_mx { border-left-color: #6fdc8c; }
+.border-log-row.dir-mx_to_us { border-left-color: #6cd1ff; }
+.log-date { font-size: 12px; font-weight: 600; }
+.log-arrow { font-size: 14px; }
+.log-actions { display: flex; gap: 3px; }
+.log-actions button { padding: 2px 5px; font-size: 12px; }
+
+/* Spanish */
+.spanish { display: flex; flex-direction: column; gap: 6px; }
+.phrase-card {
+  padding: 6px 8px; border-radius: 4px;
+  background: rgba(255,255,255,0.03); font-size: 13px;
+  border-left: 2px solid transparent;
+}
+.phrase-card.phrase-big {
+  padding: 10px; border-left-color: #6cd1ff;
+  background: rgba(108,209,255,0.08);
+}
+.phrase-es { font-weight: 600; }
+.phrase-es-big { font-weight: 700; font-size: 16px; }
+.phrase-en { font-size: 12px; }
+.phrase-cat {
+  font-size: 10px; padding: 1px 5px;
+  background: rgba(108,209,255,0.15); color: #6cd1ff;
+  border-radius: 8px; margin-top: 3px; display: inline-block;
+}
+.phrase-practice { display: flex; flex-direction: column; gap: 4px; }
+.speak-btn {
+  padding: 2px 6px; font-size: 14px; background: none;
+  border: 1px solid var(--border, #2a2f37); border-radius: 3px;
+  cursor: pointer; color: inherit;
+}
+.speak-btn:hover { border-color: #6cd1ff; color: #6cd1ff; }
+.translate-input { display: flex; flex-direction: column; gap: 4px; }
+.translate-input textarea {
+  padding: 4px 6px; background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border, #2a2f37); color: inherit;
+  border-radius: 3px; font-family: inherit; resize: vertical;
+}
+.translate-controls { display: flex; gap: 4px; align-items: center; }
+.translate-controls select {
+  padding: 3px 6px; font-size: 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border, #2a2f37); color: inherit; border-radius: 3px;
+}
+.translate-swap {
+  padding: 3px 8px; font-size: 14px; background: none;
+  border: 1px solid var(--border, #2a2f37); border-radius: 3px;
+  color: inherit;
+}
+.translate-log {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 240px; overflow: auto; margin-top: 6px;
+}
+.translate-item {
+  display: flex; gap: 4px; padding: 4px 6px; border-radius: 3px;
+  background: rgba(255,255,255,0.03);
+}
+.translate-item.starred { background: rgba(255,209,102,0.08); border-left: 2px solid #ffd166; }
+.translate-item button { padding: 2px 5px; font-size: 12px; }
+
 /* Print / Save-as-PDF: light theme, full-width, no clipped charts. */
 @media print {
   @page {

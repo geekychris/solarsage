@@ -247,4 +247,16 @@ export const api = {
     request("/api/events/ingest_hoa", { method: "POST" }),
   ttsSay: (text) =>
     request("/api/tts/say", { method: "POST", body: { text } }),
+  // Translations
+  translate: (text, source = "en", target = "es") =>
+    request("/api/translations", {
+      method: "POST",
+      body: { text, source, target },
+    }),
+  getTranslations: (limit = 50) =>
+    request(`/api/translations?limit=${limit}`),
+  starTranslation: (id) =>
+    request(`/api/translations/${id}/star`, { method: "POST" }),
+  deleteTranslation: (id) =>
+    request(`/api/translations/${id}`, { method: "DELETE" }),
 };

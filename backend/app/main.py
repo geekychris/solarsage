@@ -64,6 +64,19 @@ from .widgets.news import NewsWidget
 from .widgets.reservations import ReservationsWidget
 from .widgets.outdoor_fishing import FishingWindowWidget
 from .widgets.trip_planner import TripPlannerWidget
+from .widgets.property_tax import PropertyTaxWidget
+from .widgets.return_countdown import ReturnCountdownWidget
+from .widgets.whale_season import WhaleSeasonWidget
+from .widgets.sea_temp import SeaTempWidget
+from .widgets.baja_news import BajaNewsWidget
+from .widgets.baja_races import BajaRacesWidget
+from .widgets.contacts import ContactsWidget
+from .widgets.shopping_list import ShoppingListWidget
+from .widgets.border_log import BorderLogWidget
+from .widgets.spanish import SpanishWidget
+from .widgets.costco_fuel import CostcoFuelWidget
+from .widgets.consumption_yoy import ConsumptionYoYWidget
+from .translations import TranslationsStore, mymemory_translate
 from .events import EventStore, run_reminder_scheduler
 from .events.store import Event as EventRow, Reminder as ReminderRow, event_to_dict
 from .events.scheduler import _ingest_once as events_ingest_once
@@ -85,6 +98,7 @@ sessions = SessionStore()
 history = History(DB_PATH)
 widget_store = WidgetStore(DB_PATH)
 event_store = EventStore(DB_PATH)
+translations_store = TranslationsStore(DB_PATH)
 
 
 def _register_builtin_widgets() -> None:
@@ -106,20 +120,33 @@ def _register_builtin_widgets() -> None:
         MarineWidget(),
         SunMoonWidget(),
         FishingWindowWidget(),
+        # Outdoor extras
+        SeaTempWidget(),
+        WhaleSeasonWidget(),
         # Travel
         TripPlannerWidget(),
+        ReturnCountdownWidget(),
         CurrencyWidget(),
+        CostcoFuelWidget(),
         DriveTimeWidget(),
         HolidaysWidget(),
+        BorderLogWidget(),
+        ShoppingListWidget(),
         # Solar synergy
         PropertyModeWidget(),
         SolarExcessWidget(),
         PrecoolWidget(),
+        ConsumptionYoYWidget(),
         # Community
         NewsletterWidget(),
         NewsWidget(),
+        BajaNewsWidget(),
+        BajaRacesWidget(),
         ReservationsWidget(),
         QuickLinksWidget(),
+        PropertyTaxWidget(),
+        ContactsWidget(),
+        SpanishWidget(),
     ):
         if widget_registry.get(widget.id) is None:
             widget_registry.register(widget)
@@ -209,6 +236,7 @@ async def lifespan(app: FastAPI):
     await history.init()
     await widget_store.init()
     await event_store.init()
+    await translations_store.init()
     await _bootstrap_default_site()
     log.info("history db ready at %s", DB_PATH)
     # Start the auto-login loop unconditionally — it idles if no creds are
@@ -2023,6 +2051,79 @@ async def post_ingest_hoa(_: Session | None = Depends(require_read)):
     PUTing a new HOA widget config or to pick up a freshly published PDF
     without waiting for the hourly tick."""
     await events_ingest_once(event_store, widget_store)
+    return {"ok": True}
+
+
+@app.post(
+    "/api/translations",
+    tags=["spanish"],
+    summary="Translate text and log it",
+)
+async def post_translation(
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Translate ``text`` from ``source`` (default ``en``) to ``target``
+    (default ``es``) via MyMemory. Every lookup is persisted so the
+    Spanish widget can show a rolling phrase book. Body:
+    ``{"text": "hello", "source": "en", "target": "es"}``."""
+    text = str(body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="missing text")
+    source = str(body.get("source") or "en").lower()
+    target = str(body.get("target") or "es").lower()
+    try:
+        translated = await mymemory_translate(text, source=source, target=target)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc))
+    tid = await translations_store.add(source, target, text, translated)
+    return {
+        "id": tid,
+        "source": source,
+        "target": target,
+        "source_text": text,
+        "target_text": translated,
+    }
+
+
+@app.get(
+    "/api/translations",
+    tags=["spanish"],
+    summary="Recent translations log",
+)
+async def get_translations(
+    limit: int = Query(default=50, ge=1, le=500),
+    _: Session | None = Depends(require_read),
+):
+    """List the most-recent translations. Home automation can also poll
+    this to build a lock-screen phrase book."""
+    items = await translations_store.recent(limit=limit)
+    return {"translations": items}
+
+
+@app.post(
+    "/api/translations/{tid}/star",
+    tags=["spanish"],
+    summary="Star / unstar a translation",
+)
+async def post_translation_star(
+    tid: int,
+    _: Session | None = Depends(require_read),
+):
+    await translations_store.toggle_star(tid)
+    return {"ok": True}
+
+
+@app.delete(
+    "/api/translations/{tid}",
+    tags=["spanish"],
+    summary="Delete a translation",
+)
+async def delete_translation(
+    tid: int,
+    _: Session | None = Depends(require_read),
+):
+    await translations_store.delete(tid)
     return {"ok": True}
 
 
