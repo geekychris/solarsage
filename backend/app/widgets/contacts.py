@@ -25,6 +25,9 @@ class ContactsWidget(Widget):
     refresh_seconds = 24 * 3600
     default_tab = "Community"
     default_position = 200
+    sheets_tab = "Contacts"
+    sheets_list_field = "contacts"
+    sheets_field_order = ["name", "phone", "email", "location", "tags", "notes"]
 
     config_schema = {
         "type": "object",

@@ -26,6 +26,9 @@ class ShoppingListWidget(Widget):
     refresh_seconds = 24 * 3600
     default_tab = "Travel"
     default_position = 100
+    sheets_tab = "Shopping"
+    sheets_list_field = "items"
+    sheets_field_order = ["text", "category", "checked", "notes"]
 
     config_schema = {
         "type": "object",

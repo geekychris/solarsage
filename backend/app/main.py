@@ -77,6 +77,8 @@ from .widgets.spanish import SpanishWidget
 from .widgets.costco_fuel import CostcoFuelWidget
 from .widgets.consumption_yoy import ConsumptionYoYWidget
 from .translations import TranslationsStore, mymemory_translate
+from .widgets.todo import TodoWidget
+from .sheets import SheetsSync, load_sheets_from_env
 from .events import EventStore, run_reminder_scheduler
 from .events.store import Event as EventRow, Reminder as ReminderRow, event_to_dict
 from .events.scheduler import _ingest_once as events_ingest_once
@@ -99,6 +101,11 @@ history = History(DB_PATH)
 widget_store = WidgetStore(DB_PATH)
 event_store = EventStore(DB_PATH)
 translations_store = TranslationsStore(DB_PATH)
+sheets: SheetsSync | None = load_sheets_from_env()
+if sheets is not None:
+    log.info("Google Sheets sync enabled")
+else:
+    log.info("Google Sheets sync not configured (widgets use SQLite)")
 
 
 def _register_builtin_widgets() -> None:
@@ -146,6 +153,7 @@ def _register_builtin_widgets() -> None:
         QuickLinksWidget(),
         PropertyTaxWidget(),
         ContactsWidget(),
+        TodoWidget(),
         SpanishWidget(),
     ):
         if widget_registry.get(widget.id) is None:
@@ -246,7 +254,7 @@ async def lifespan(app: FastAPI):
     alerts_task = asyncio.create_task(run_alerts(history))
     log.info("alerts watcher started")
     widgets_task = asyncio.create_task(
-        run_widget_refreshers(widget_registry, widget_store)
+        run_widget_refreshers(widget_registry, widget_store, sheets)
     )
     log.info("widget refreshers started (%d widgets)", len(list(widget_registry.all())))
     events_task = asyncio.create_task(
@@ -1844,10 +1852,23 @@ async def put_widget_config(
     _: Session | None = Depends(require_read),
 ):
     w = _require_widget(widget_id)
+    # Sheets-backed widgets: write the list_field to Sheets. Whole body
+    # is still cached to widget_config as a fallback (so we survive a
+    # Sheets outage / misconfigured tab).
+    if sheets is not None and w.sheets_tab and w.sheets_list_field:
+        items = body.get(w.sheets_list_field)
+        if isinstance(items, list):
+            try:
+                await sheets.write(w.sheets_tab, w.sheets_field_order, items)
+            except Exception as exc:  # noqa: BLE001
+                log.warning(
+                    "sheets write for %s tab=%r failed: %s",
+                    w.id, w.sheets_tab, exc,
+                )
     await widget_store.put_config(w.id, body)
     # New config — pull fresh data immediately so the UI reflects the change
     # without waiting for the next refresh tick.
-    await widget_refresh_now(w, widget_store)
+    await widget_refresh_now(w, widget_store, sheets)
     state = await widget_store.get_state(w.id)
     return {
         "id": w.id,
@@ -1867,7 +1888,7 @@ async def post_widget_refresh(
     _: Session | None = Depends(require_read),
 ):
     w = _require_widget(widget_id)
-    await widget_refresh_now(w, widget_store)
+    await widget_refresh_now(w, widget_store, sheets)
     return {"id": w.id, **(await _widget_payload(w))}
 
 

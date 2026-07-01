@@ -6,3 +6,5 @@ aiosqlite==0.20.0
 pydantic==2.10.3
 python-dotenv==1.0.1
 pypdf==5.1.0
+gspread==6.1.4
+google-auth==2.36.0

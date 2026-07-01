@@ -25,6 +25,9 @@ class BorderLogWidget(Widget):
     refresh_seconds = 24 * 3600
     default_tab = "Travel"
     default_position = 90
+    sheets_tab = "Border Log"
+    sheets_list_field = "crossings"
+    sheets_field_order = ["date", "direction", "port", "wait_min", "purpose", "notes"]
 
     config_schema = {
         "type": "object",

@@ -34,6 +34,7 @@ import BorderLogWidget from "./widgets/BorderLogWidget.jsx";
 import SpanishWidget from "./widgets/SpanishWidget.jsx";
 import CostcoFuelWidget from "./widgets/CostcoFuelWidget.jsx";
 import ConsumptionYoYWidget from "./widgets/ConsumptionYoYWidget.jsx";
+import TodoWidget from "./widgets/TodoWidget.jsx";
 import WidgetSettings from "./WidgetSettings.jsx";
 
 const RENDERERS = {
@@ -70,6 +71,7 @@ const RENDERERS = {
   spanish: SpanishWidget,
   costco_fuel: CostcoFuelWidget,
   consumption_yoy: ConsumptionYoYWidget,
+  todo: TodoWidget,
 };
 
 // Stable order for subtabs when more than one is present.

@@ -1391,6 +1391,39 @@ select, input {
 .translate-item.starred { background: rgba(255,209,102,0.08); border-left: 2px solid #ffd166; }
 .translate-item button { padding: 2px 5px; font-size: 12px; }
 
+/* Todo */
+.todo { display: flex; flex-direction: column; gap: 6px; }
+.todo-stats { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+.todo-overdue-badge {
+  padding: 1px 6px; border-radius: 8px;
+  background: rgba(239,111,108,0.15); color: #ef6f6c;
+  font-weight: 600; font-size: 11px;
+}
+.todo-add { display: flex; gap: 4px; }
+.todo-add input { flex: 1; padding: 4px 8px; font-size: 12px; }
+.todo-add select { padding: 4px; font-size: 12px; }
+.todo-add input[type="date"] { flex: 0; width: 130px; }
+.todo-item {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 6px;
+  align-items: center; padding: 4px 6px;
+  border-radius: 3px; background: rgba(255,255,255,0.02);
+  border-left: 3px solid transparent;
+}
+.todo-item.done { opacity: 0.5; }
+.todo-item.done .todo-text { text-decoration: line-through; }
+.todo-item.overdue { border-left-color: #ef6f6c; }
+.todo-text { font-size: 13px; }
+.todo-meta { display: flex; gap: 4px; font-size: 11px; margin-top: 2px; }
+.todo-pri {
+  padding: 1px 5px; border-radius: 8px; font-weight: 600;
+}
+.pri-1 { background: rgba(239,111,108,0.15); color: #ef6f6c; }
+.pri-2 { background: rgba(255,155,108,0.15); color: #ff9b6c; }
+.pri-3 { background: rgba(255,209,102,0.15); color: #ffd166; }
+.pri-4 { background: rgba(108,209,255,0.15); color: #6cd1ff; }
+.pri-5 { background: rgba(136,136,136,0.15); color: #888; }
+.todo-due { color: var(--muted, #888); }
+
 /* Print / Save-as-PDF: light theme, full-width, no clipped charts. */
 @media print {
   @page {

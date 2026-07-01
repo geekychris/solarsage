@@ -43,6 +43,12 @@ class Widget:
     config_schema: dict[str, Any] = {}
     # Defaults used when no config row exists yet.
     default_config: dict[str, Any] = {}
+    # Sheets backing (opt-in). When these are set AND a SheetsSync is
+    # configured in main.py, the widget stores its list-of-items in a
+    # Google Sheets tab instead of widget_config.
+    sheets_tab: str = ""              # workbook tab name
+    sheets_list_field: str = ""       # config field that holds the array
+    sheets_field_order: list[str] = []  # widget field names in column order
 
     def meta(self) -> dict[str, Any]:
         return {
@@ -53,6 +59,8 @@ class Widget:
             "refresh_seconds": self.refresh_seconds,
             "default_tab": self.default_tab,
             "default_position": self.default_position,
+            "sheets_tab": self.sheets_tab,
+            "sheets_list_field": self.sheets_list_field,
             "data_schema": self.data_schema,
             "config_schema": self.config_schema,
             "default_config": self.default_config,
