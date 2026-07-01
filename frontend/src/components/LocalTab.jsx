@@ -36,7 +36,6 @@ import CostcoFuelWidget from "./widgets/CostcoFuelWidget.jsx";
 import ConsumptionYoYWidget from "./widgets/ConsumptionYoYWidget.jsx";
 import TodoWidget from "./widgets/TodoWidget.jsx";
 import SubscriptionsWidget from "./widgets/SubscriptionsWidget.jsx";
-import RotationConfigWidget from "./widgets/RotationConfigWidget.jsx";
 import SolarVitalsWidget from "./widgets/SolarVitalsWidget.jsx";
 import WidgetSettings from "./WidgetSettings.jsx";
 
@@ -234,17 +233,6 @@ export default function LocalTab({ tzOffsetMinutes }) {
         layout: { tab: "Lists", position: 5 },
         fetched_at: null, error: null, data: null,
       },
-      {
-        id: "_rotation",
-        meta: {
-          kind: "_rotation",
-          name: "Rotation (screensaver)",
-          description:
-            "Fullscreen cycler that walks through selected widgets with per-step dwell times. Same widget can appear multiple times to weight visibility.",
-        },
-        layout: { tab: "Lists", position: 8 },
-        fetched_at: null, error: null, data: null,
-      },
     ];
     return [...virtual, ...widgets];
   }, [widgets]);
@@ -327,10 +315,8 @@ export default function LocalTab({ tzOffsetMinutes }) {
       </div>
       <div className="local-grid">
         {widgetsInTab.map((w) => {
-          if (w.id === "_events" || w.id === "_subscriptions" || w.id === "_rotation") {
-            const Inner = w.id === "_events" ? EventsWidget
-                       : w.id === "_rotation" ? RotationConfigWidget
-                       : SubscriptionsWidget;
+          if (w.id === "_events" || w.id === "_subscriptions") {
+            const Inner = w.id === "_events" ? EventsWidget : SubscriptionsWidget;
             return (
               <div key={w.id} className="panel widget-card">
                 <div className="widget-head">
