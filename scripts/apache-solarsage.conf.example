@@ -1,0 +1,64 @@
+# Apache name-based vhost for SolarSage, sitting alongside other sites
+# on the same box. Serves the frontend on :443 and proxies the backend
+# API + WebSockets on the same origin.
+#
+# Copy to /etc/apache2/sites-available/solarsage.conf and enable with:
+#   sudo a2enmod proxy_wstunnel proxy_http rewrite ssl headers
+#   sudo a2ensite solarsage
+#   sudo systemctl reload apache2
+#
+# Cert paths assume you've generated a self-signed cert at
+# /etc/apache2/ssl/. See docs/DEPLOYMENT.md for cert generation.
+
+<VirtualHost *:80>
+    ServerName pi-sf.hitorro.com
+    # Add whatever hostnames you access this Pi by:
+    ServerAlias pi-sf localhost
+    ServerAlias pi5 pi5.hitorro.com
+    ServerAlias pi-ha.hitorro.com
+
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} !^/\.well-known/
+    RewriteRule ^/(.*)$ https://%{HTTP_HOST}/$1 [R=302,L]
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName pi-sf.hitorro.com
+    ServerAlias pi-sf localhost
+    ServerAlias pi5 pi5.hitorro.com
+    ServerAlias pi-ha.hitorro.com
+
+    SSLEngine on
+    SSLCertificateFile /etc/apache2/ssl/pi-sf.pem
+    SSLCertificateKeyFile /etc/apache2/ssl/pi-sf.key
+    SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1
+
+    Protocols h2 http/1.1
+
+    ProxyPreserveHost On
+    ProxyRequests Off
+    ProxyTimeout 600
+
+    # Vite HMR websocket
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteRule /(.*) ws://127.0.0.1:5173/$1 [P,L]
+
+    # Backend API
+    ProxyPass        /api/    http://127.0.0.1:8000/api/
+    ProxyPassReverse /api/    http://127.0.0.1:8000/api/
+    ProxyPass        /docs    http://127.0.0.1:8000/docs
+    ProxyPassReverse /docs    http://127.0.0.1:8000/docs
+    ProxyPass        /openapi.json http://127.0.0.1:8000/openapi.json
+    ProxyPassReverse /openapi.json http://127.0.0.1:8000/openapi.json
+
+    # Vite frontend (catch-all)
+    ProxyPass        /        http://127.0.0.1:5173/
+    ProxyPassReverse /        http://127.0.0.1:5173/
+
+    RequestHeader set X-Forwarded-Proto https
+    RequestHeader set X-Forwarded-Port 443
+
+    ErrorLog  ${APACHE_LOG_DIR}/solarsage-error.log
+    CustomLog ${APACHE_LOG_DIR}/solarsage-access.log combined
+</VirtualHost>

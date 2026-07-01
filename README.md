@@ -51,6 +51,18 @@ works inside.
 | **Anomaly alerts** | Background watcher fires on low SoC, daylight-but-no-PV, weak strings. Persisted, acknowledge-able. |
 | **REST API** | Every panel is also a queryable endpoint. `/docs` is auto-OpenAPI. |
 | **MCP server** | Same surface as native Claude / LLM tools — *"how much did I export last week?"* becomes a real tool call. |
+| **Local widgets** | 35+ self-describing dashboard tiles beyond solar — tides, border wait times, marine forecast, HOA activities, tropical storms, quakes, Mexican holidays, drive-time planner, currency, air quality, and more. Auto-organized into sub-tabs (Safety / Outdoor / Travel / Solar / Community / Lists). |
+| **Events + TTS reminders** | Auto-extracts events from the El Dorado Ranch HOA weekly PDF, schedules configurable reminders, speaks them through a local TTS service ("Movie Night starts in 60 minutes"). |
+| **Google Sheets sync** | User-editable lists (contacts, shopping, todo, border crossings, bookmarks) live in a Google Sheets workbook — edit from any device, dashboard picks it up. |
+| **Persistent news archive + translation** | RSS feed items stored in SQLite; headlines translated on-demand via MyMemory and cached forever. |
+
+## Documentation
+
+* [`docs/INSTALLATION.md`](docs/INSTALLATION.md) — install + configuration
+* [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the pieces fit together
+* [`docs/WIDGETS.md`](docs/WIDGETS.md) — writing your own widget (backend + frontend renderer)
+* [`docs/SHEETS.md`](docs/SHEETS.md) — Google Sheets integration setup
+* [`docs/API.md`](docs/API.md) — REST + MCP reference (auto-generated OpenAPI at `/docs`)
 
 ## UI walkthrough
 
