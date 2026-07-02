@@ -14,8 +14,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 log "Installing prometheus (apt-get)…"
-sudo -n apt-get update -qq >/dev/null
-sudo -n apt-get install -y prometheus >/dev/null
+# Passwordless sudoers here only matches the exact `apt-get update` and
+# `apt-get -y install <pkg>` forms — no extra flags.
+sudo -n apt-get update >/dev/null 2>&1 || true
+sudo -n apt-get -y install prometheus >/dev/null
 ok "prometheus installed"
 
 log "Writing /etc/prometheus/prometheus.yml (needs sudo)…"
