@@ -1,0 +1,70 @@
+[
+  {
+    "file": "01-dashboard-solar.png",
+    "caption": "Solar tab — vitals + climate + peak load + forecast accuracy"
+  },
+  {
+    "file": "02-dashboard-outdoor.png",
+    "caption": "Outdoor tab — weather, tides, marine, sunset, sky tonight, meteor showers"
+  },
+  {
+    "file": "03-dashboard-safety.png",
+    "caption": "Safety tab — earthquakes, storms, UV & heat, air quality"
+  },
+  {
+    "file": "04-dashboard-travel.png",
+    "caption": "Travel tab — trip planner, border wait times, fuel prices with live Pemex data"
+  },
+  {
+    "file": "05-dashboard-community.png",
+    "caption": "Community tab — events, HOA activities, news, Spanish practice"
+  },
+  {
+    "file": "06-widget-solar-vitals.png",
+    "caption": "Solar Vitals — SoC, PV per string, load breakdown, per-AC override, per-room temp/humidity"
+  },
+  {
+    "file": "07-widget-climate-chart.png",
+    "caption": "Room Climate History — 24h/3d/7d temp + humidity with hover crosshair"
+  },
+  {
+    "file": "08-widget-water-tank.png",
+    "caption": "Water Tank — gallons + days-remaining projection with tiered warning bar"
+  },
+  {
+    "file": "09-widget-peak-load.png",
+    "caption": "Peak Load — rolling 30-day max simultaneous house load"
+  },
+  {
+    "file": "10-widget-acpv-overlay.png",
+    "caption": "AC vs PV Overlay — 24h of PV production against smart_ac consumption"
+  },
+  {
+    "file": "11-widget-sky-tonight.png",
+    "caption": "Sky Tonight — naked-eye planets tonight + moon phase, computed locally"
+  },
+  {
+    "file": "12-settings-system.png",
+    "caption": "Settings → System — location map picker + external service URLs and tokens"
+  },
+  {
+    "file": "13-settings-notifications.png",
+    "caption": "Settings → Notifications — per-source enable, quiet hours, test-fire, history + replay"
+  },
+  {
+    "file": "14-settings-ha-integrations.png",
+    "caption": "Settings → HA Integrations — per-widget entity pickers with live values from Home Assistant"
+  },
+  {
+    "file": "15-settings-rotation.png",
+    "caption": "Settings → Rotation — fullscreen 'screensaver' widget rotation with per-step dwell"
+  },
+  {
+    "file": "16-rotation-mode.png",
+    "caption": "Rotation mode — full-screen kiosk view walking through configured widgets"
+  },
+  {
+    "file": "17-mobile-dashboard.png",
+    "caption": "Mobile viewport — same widgets, 1-column grid"
+  }
+]
