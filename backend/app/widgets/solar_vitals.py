@@ -578,7 +578,15 @@ class SolarVitalsWidget(Widget):
                     except (TypeError, ValueError):
                         value = None
                     return value, unit
-                for rs in config.get("room_sensors") or []:
+                # If the persisted config predates the room_sensors
+                # field entirely, use the class defaults so the user
+                # sees something without editing config first.
+                room_sensors_cfg = (
+                    config["room_sensors"]
+                    if "room_sensors" in config
+                    else self.default_config.get("room_sensors") or []
+                )
+                for rs in room_sensors_cfg:
                     name = rs.get("name") or ""
                     temp_eid = rs.get("temp_entity") or ""
                     hum_eid = rs.get("humidity_entity") or ""
