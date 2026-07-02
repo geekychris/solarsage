@@ -56,6 +56,13 @@ export default function Settings({ open, onClose, onSaved }) {
         battery_capacity_kwh: Number(s.battery_capacity_kwh),
         max_charge_kw: Number(s.max_charge_kw),
         history_days: Number(s.history_days),
+        ha_url: s.ha_url ?? "",
+        ha_token: s.ha_token ?? "",
+        tts_url: s.tts_url ?? "",
+        notify_telegram_service: s.notify_telegram_service ?? "",
+        notify_telegram_target: s.notify_telegram_target ?? "",
+        worldtides_api_key: s.worldtides_api_key ?? "",
+        eia_api_key: s.eia_api_key ?? "",
       });
       onSaved(out);
       onClose();
@@ -131,6 +138,78 @@ export default function Settings({ open, onClose, onSaved }) {
                 <input value={s.history_days} onChange={(e) => up("history_days", e.target.value)} />
               </div>
             </div>
+
+            <h4 style={{ marginTop: 20, marginBottom: 6 }}>External services</h4>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+              URLs, tokens, and API keys for services SolarSage talks to.
+              Leaving a field blank falls back to the backend's env var
+              of the same uppercased name (e.g. <code>HA_URL</code>).
+            </div>
+            <div className="grid-2">
+              <div className="field" style={{ gridColumn: "span 2" }}>
+                <label>Home Assistant URL</label>
+                <input
+                  value={s.ha_url ?? ""}
+                  placeholder="http://ha-sf.hitorro.com:8123"
+                  onChange={(e) => up("ha_url", e.target.value)}
+                />
+              </div>
+              <div className="field" style={{ gridColumn: "span 2" }}>
+                <label>Home Assistant token</label>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={s.ha_token ?? ""}
+                  placeholder="long-lived access token"
+                  onChange={(e) => up("ha_token", e.target.value)}
+                />
+                <span className="muted" style={{ fontSize: 11 }}>
+                  Profile → Security → Long-Lived Access Tokens in HA.
+                </span>
+              </div>
+              <div className="field" style={{ gridColumn: "span 2" }}>
+                <label>Local TTS URL</label>
+                <input
+                  value={s.tts_url ?? ""}
+                  placeholder="http://localhost:5006/say"
+                  onChange={(e) => up("tts_url", e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>Telegram service (HA)</label>
+                <input
+                  value={s.notify_telegram_service ?? ""}
+                  placeholder="notify.telegram"
+                  onChange={(e) => up("notify_telegram_service", e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>Telegram target (chat id)</label>
+                <input
+                  value={s.notify_telegram_target ?? ""}
+                  placeholder="123456789 or @channel"
+                  onChange={(e) => up("notify_telegram_target", e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>WorldTides API key</label>
+                <input
+                  value={s.worldtides_api_key ?? ""}
+                  type="password" autoComplete="off"
+                  onChange={(e) => up("worldtides_api_key", e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>EIA API key</label>
+                <input
+                  value={s.eia_api_key ?? ""}
+                  type="password" autoComplete="off"
+                  placeholder="DEMO_KEY (rate-limited fallback)"
+                  onChange={(e) => up("eia_api_key", e.target.value)}
+                />
+              </div>
+            </div>
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
               <button type="button" onClick={onClose}>Cancel</button>
               <button className="primary" type="submit" disabled={busy}>

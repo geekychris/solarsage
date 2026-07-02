@@ -219,7 +219,7 @@ async def _auto_login_loop() -> None:
         try:
             client = EG4InverterAPI(username=username, password=password, base_url=BASE_URL)
             await client.login(ignore_ssl=IGNORE_SSL)
-            session = sessions.create(username, client)
+            session = await sessions.create_persisted(username, client)
             log.info("auto-login OK for %s (token=%s…)", username, session.token[:8])
             session.poller_task = asyncio.create_task(
                 run_poller(session, history, POLL_INTERVAL)
@@ -272,6 +272,10 @@ async def _bootstrap_default_site() -> None:
 async def lifespan(app: FastAPI):
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     await history.init()
+    # Give the session store a reference so login tokens survive restarts.
+    sessions.bind_history(history)
+    # Overlay any DB-backed integration settings on top of the env vars.
+    await _refresh_integration_cache()
     await widget_store.init()
     await event_store.init()
     await translations_store.init()
@@ -362,7 +366,11 @@ async def _resolve_auth(
     """Returns (session_or_None, is_api_key_auth). Raises 401 on no auth."""
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization.split(" ", 1)[1].strip()
-        s = sessions.get(token)
+        # Falls back to the persisted token→username table so that a
+        # browser's stored token continues to work after a backend
+        # restart — the returned Session is whichever live session
+        # currently belongs to that username (auto-login's usually).
+        s = await sessions.get_or_restore(token)
         if s is not None:
             return s, False
     presented = x_api_key or api_key_q
@@ -428,7 +436,7 @@ async def login(req: LoginRequest):
             )
         raise HTTPException(status_code=502, detail=msg) from exc
 
-    session = sessions.create(req.username, client)
+    session = await sessions.create_persisted(req.username, client)
     # kick off the historical poller for this session
     session.poller_task = asyncio.create_task(
         run_poller(session, history, POLL_INTERVAL)
@@ -600,7 +608,48 @@ DEFAULT_SETTINGS = {
     "battery_capacity_kwh": 14.3,
     "max_charge_kw": 8.0,
     "history_days": 7,
+    # Integrations — URL/tokens for services SolarSage talks to. These
+    # were env-vars-only; now they live in the settings table so the
+    # UI can edit them. Env still wins if the DB value is empty.
+    "ha_url": "",
+    "ha_token": "",
+    "tts_url": "",
+    "notify_telegram_service": "",
+    "notify_telegram_target": "",
+    "worldtides_api_key": "",
+    "eia_api_key": "",
 }
+
+
+# Global cache for DB-backed integration settings — refreshed on save so
+# hot-path calls (widget refreshers, notify dispatch, /api/smart_ac/override)
+# don't hit SQLite every request.
+_INTEGRATION_CACHE: dict[str, str] = {}
+
+
+async def _refresh_integration_cache() -> None:
+    """Reload DB integration settings into the process-level cache and
+    export any populated ones as env vars so downstream code that reads
+    ``os.getenv(...)`` picks up the new value without changes."""
+    raw = await history.get_settings()
+    global _INTEGRATION_CACHE
+    _INTEGRATION_CACHE = {}
+    for k in (
+        "ha_url", "ha_token", "tts_url",
+        "notify_telegram_service", "notify_telegram_target",
+        "worldtides_api_key", "eia_api_key",
+    ):
+        v = raw.get(k)
+        try:
+            v = json.loads(v) if v is not None else ""
+        except Exception:  # noqa: BLE001
+            pass
+        if isinstance(v, str) and v:
+            _INTEGRATION_CACHE[k] = v
+            # Mirror to env so os.getenv() sites transparently pick up
+            # settings edits without a redeploy. Uppercase env-var
+            # convention matches what the codebase already reads.
+            os.environ[k.upper()] = v
 
 
 def _tz_offset_minutes(tz_name: str) -> int:
@@ -657,6 +706,16 @@ async def put_settings(
     if not to_write:
         raise HTTPException(status_code=400, detail="no recognized settings in body")
     await history.set_settings(to_write)
+    # If any integration field moved, mirror to env so downstream
+    # ``os.getenv`` sites (notify, HA calls, etc.) pick it up next
+    # request without a restart.
+    integration_keys = {
+        "ha_url", "ha_token", "tts_url",
+        "notify_telegram_service", "notify_telegram_target",
+        "worldtides_api_key", "eia_api_key",
+    }
+    if any(k in integration_keys for k in to_write):
+        await _refresh_integration_cache()
     return await _load_settings()
 
 

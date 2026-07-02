@@ -48,6 +48,14 @@ class SessionStore:
     def __init__(self) -> None:
         self._sessions: dict[str, Session] = {}
         self._site_sessions: dict[str, SiteSession] = {}
+        # History reference is optional — set once from main.py so we can
+        # persist and revalidate browser tokens across backend restarts.
+        # Without it, we behave exactly as before (in-memory only).
+        self._history: Any | None = None
+
+    def bind_history(self, history: Any) -> None:
+        """Attach the history store so tokens survive uvicorn restarts."""
+        self._history = history
 
     # ---- legacy UI sessions ----
     def create(self, username: str, client: EG4InverterAPI) -> Session:
@@ -56,8 +64,50 @@ class SessionStore:
         self._sessions[token] = session
         return session
 
+    async def create_persisted(
+        self, username: str, client: EG4InverterAPI,
+    ) -> Session:
+        """Like ``create`` but also writes ``token → username`` to the DB
+        so the browser can present the same token after a backend
+        restart and get re-associated with the freshly auto-logged-in
+        session for that username."""
+        session = self.create(username, client)
+        if self._history is not None:
+            try:
+                await self._history.save_web_session(session.token, username)
+            except Exception:  # noqa: BLE001
+                pass
+        return session
+
     def get(self, token: str) -> Optional[Session]:
-        return self._sessions.get(token)
+        s = self._sessions.get(token)
+        if s is not None:
+            return s
+        return None
+
+    async def get_or_restore(self, token: str) -> Optional[Session]:
+        """Async variant used by ``require_session``. If the in-memory
+        map has no entry for ``token`` but the DB says the token
+        previously belonged to ``username``, return the current live
+        session for that username (typically the auto-login one). This
+        keeps browser tokens valid across restarts without persisting
+        the EG4 client state itself."""
+        direct = self._sessions.get(token)
+        if direct is not None:
+            return direct
+        if self._history is None:
+            return None
+        try:
+            username = await self._history.get_web_session_username(token)
+        except Exception:  # noqa: BLE001
+            return None
+        if not username:
+            return None
+        # Find any active session for that user
+        for s in self._sessions.values():
+            if s.username == username:
+                return s
+        return None
 
     async def drop(self, token: str) -> None:
         session = self._sessions.pop(token, None)

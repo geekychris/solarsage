@@ -69,6 +69,11 @@ CREATE TABLE IF NOT EXISTS alerts (
   acknowledged INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_recent ON alerts(site_id, ts);
+CREATE TABLE IF NOT EXISTS web_sessions (
+  token TEXT PRIMARY KEY,
+  username TEXT NOT NULL,
+  created_at REAL NOT NULL
+);
 """
 
 # Run after CREATE TABLE — adds site_id to existing tables for users
@@ -542,6 +547,41 @@ class History:
                 list(items.items()),
             )
             await db.commit()
+
+    # ------------------------- web session tokens ---------------------------
+    async def save_web_session(self, token: str, username: str) -> None:
+        import time as _time
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "INSERT INTO web_sessions(token, username, created_at) VALUES (?,?,?)"
+                " ON CONFLICT(token) DO UPDATE SET username=excluded.username",
+                (token, username, _time.time()),
+            )
+            await db.commit()
+
+    async def get_web_session_username(self, token: str) -> str | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute(
+                "SELECT username FROM web_sessions WHERE token=?", (token,),
+            )
+            row = await cur.fetchone()
+        return row[0] if row else None
+
+    async def drop_web_session(self, token: str) -> None:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM web_sessions WHERE token=?", (token,))
+            await db.commit()
+
+    async def prune_web_sessions(self, older_than_seconds: float = 30 * 86400) -> int:
+        """Delete tokens older than the given age. Returns rows removed."""
+        import time as _time
+        cutoff = _time.time() - older_than_seconds
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute(
+                "DELETE FROM web_sessions WHERE created_at < ?", (cutoff,),
+            )
+            await db.commit()
+            return cur.rowcount or 0
 
     async def latest(self, serial_num: str, fields: Iterable[str]) -> dict[str, dict[str, float]]:
         """Most recent value for each field. Used by the UI to fill tiles."""
