@@ -99,7 +99,7 @@ const RENDERERS = {
 
 // Stable order for subtabs when more than one is present.
 const TAB_ORDER = [
-  "Today", "Safety", "Outdoor", "Travel", "Solar", "Community", "Lists", "Local",
+  "Today", "Safety", "Outdoor", "Travel", "Solar", "House", "Community", "Lists", "Local",
 ];
 
 function tabSortKey(t) {
@@ -290,6 +290,7 @@ export default function LocalTab({ tzOffsetMinutes }) {
   const [widgets, setWidgets] = useState(null);
   const [err, setErr] = useState("");
   const [activeSubTab, setActiveSubTab] = useState(null);
+  const [tabLabels, setTabLabels] = useState({});
 
   const load = useCallback(async () => {
     try {
@@ -306,6 +307,10 @@ export default function LocalTab({ tzOffsetMinutes }) {
     const id = setInterval(load, 60_000);
     return () => clearInterval(id);
   }, [load]);
+
+  useEffect(() => {
+    api.settings().then((s) => setTabLabels(s.tab_labels || {})).catch(() => {});
+  }, []);
 
   // The Events card is a pinned, server-side "virtual" card that lives
   // in Community by default. We carry it through the same tab system so
@@ -341,12 +346,19 @@ export default function LocalTab({ tzOffsetMinutes }) {
   }, [widgets]);
 
   const tabsAndGroups = useMemo(() => {
-    if (!widgetsWithEvents) return { tabs: [], byTab: new Map() };
+    if (!widgetsWithEvents) return { tabs: [], byTab: new Map(), internals: new Map() };
+    // Apply tab_labels aliasing — multiple internal tab names can map
+    // to the same visible label and their widgets merge.
+    const relabel = (t) => (tabLabels && tabLabels[t]) || t;
     const byTab = new Map();
+    const internals = new Map();
     for (const w of widgetsWithEvents) {
-      const t = w.layout?.tab || w.meta?.default_tab || "Local";
+      const internal = w.layout?.tab || w.meta?.default_tab || "Local";
+      const t = relabel(internal);
       if (!byTab.has(t)) byTab.set(t, []);
       byTab.get(t).push(w);
+      if (!internals.has(t)) internals.set(t, new Set());
+      internals.get(t).add(internal);
     }
     for (const list of byTab.values()) {
       list.sort((a, b) => (a.layout?.position ?? 100) - (b.layout?.position ?? 100));
@@ -354,8 +366,8 @@ export default function LocalTab({ tzOffsetMinutes }) {
     const tabs = [...byTab.keys()].sort(
       (a, b) => tabSortKey(a) - tabSortKey(b),
     );
-    return { tabs, byTab };
-  }, [widgetsWithEvents]);
+    return { tabs, byTab, internals };
+  }, [widgetsWithEvents, tabLabels]);
 
   useEffect(() => {
     if (!activeSubTab && tabsAndGroups.tabs.length > 0) {

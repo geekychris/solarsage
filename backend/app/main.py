@@ -630,6 +630,12 @@ DEFAULT_SETTINGS = {
     "notify_telegram_target": "",
     "worldtides_api_key": "",
     "eia_api_key": "",
+    # Display-name overrides for widget tabs. Keys are internal tab
+    # names (a widget's ``default_tab`` or its persisted ``_tab``);
+    # values are the label the UI shows. Two internal names mapping
+    # to the same label merge into one visible tab.
+    #   {"Solar": "House", "Local": "House", "Community": "Home & HOA"}
+    "tab_labels": {},
 }
 
 

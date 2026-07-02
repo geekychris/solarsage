@@ -1929,6 +1929,18 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
 .widget-head-meta button.active {
   background: rgba(108,209,255,0.2); color: #6cd1ff;
 }
+
+.tab-labels-editor { width: 100%; font-size: 12px; border-collapse: collapse; }
+.tab-labels-editor th, .tab-labels-editor td {
+  text-align: left; padding: 5px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.tab-labels-editor th { font-weight: 600; color: var(--muted, #888); }
+.tab-labels-editor input {
+  width: 100%; padding: 3px 6px; font-size: 12px;
+  background: rgba(255,255,255,0.05); color: inherit;
+  border: 1px solid var(--border, #232a35); border-radius: 3px;
+}
 .ha-subsection {
   margin-top: 14px; padding-top: 10px;
   border-top: 1px solid var(--border, #232a35);

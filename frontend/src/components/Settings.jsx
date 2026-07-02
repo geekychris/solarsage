@@ -12,6 +12,41 @@ const TABS = [
   { id: "ha", label: "HA Integrations" },
 ];
 
+const KNOWN_TABS = ["Today", "Safety", "Outdoor", "Travel", "Solar", "Community", "Lists", "Local"];
+
+function TabLabelsEditor({ value, onChange }) {
+  function set(tab, label) {
+    const next = { ...value };
+    if (label && label !== tab) next[tab] = label;
+    else delete next[tab];
+    onChange(next);
+  }
+  return (
+    <table className="tab-labels-editor">
+      <thead>
+        <tr>
+          <th>Internal name</th>
+          <th>Display label</th>
+        </tr>
+      </thead>
+      <tbody>
+        {KNOWN_TABS.map((t) => (
+          <tr key={t}>
+            <td><code>{t}</code></td>
+            <td>
+              <input
+                value={value[t] ?? ""}
+                placeholder={t}
+                onChange={(e) => set(t, e.target.value)}
+              />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function SecretInput({ value, onChange, placeholder, name }) {
   const [show, setShow] = useState(false);
   return (
@@ -88,6 +123,7 @@ export default function Settings({ open, onClose, onSaved }) {
         notify_telegram_target: s.notify_telegram_target ?? "",
         worldtides_api_key: s.worldtides_api_key ?? "",
         eia_api_key: s.eia_api_key ?? "",
+        tab_labels: s.tab_labels ?? {},
       });
       onSaved(out);
       onClose();
@@ -180,6 +216,17 @@ export default function Settings({ open, onClose, onSaved }) {
                 <input value={s.history_days} onChange={(e) => up("history_days", e.target.value)} />
               </div>
             </div>
+
+            <h4 style={{ marginTop: 20, marginBottom: 6 }}>Tab labels</h4>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+              Rename the widget tabs (Solar, Community, Local, etc.) or
+              consolidate — e.g. label both "Local" and "Solar" as
+              "House" and their widgets merge into one tab.
+            </div>
+            <TabLabelsEditor
+              value={s.tab_labels ?? {}}
+              onChange={(v) => up("tab_labels", v)}
+            />
 
             <h4 style={{ marginTop: 20, marginBottom: 6 }}>External services</h4>
             <div className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
