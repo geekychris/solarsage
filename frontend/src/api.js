@@ -292,6 +292,23 @@ export const api = {
     request("/api/announcements", { method: "PUT", body: config }),
   ingestAnnouncements: () =>
     request("/api/announcements/ingest", { method: "POST" }),
+  announcementHistory: (limit = 50, minutes = null) => {
+    const qs = new URLSearchParams({ limit: String(limit) });
+    if (minutes) qs.set("minutes", String(minutes));
+    return request(`/api/announcements/history?${qs}`);
+  },
+  replayAnnouncements: (minutes = 15, channels = null) => {
+    const qs = new URLSearchParams({ minutes: String(minutes) });
+    return request(`/api/announcements/replay?${qs}`, {
+      method: "POST",
+      body: channels ? { channels } : undefined,
+    });
+  },
+  testAnnouncement: (source) =>
+    request("/api/announcements/test", {
+      method: "POST",
+      body: { source },
+    }),
   // Smart AC override (delegates to Home Assistant)
   smartAcOverride: ({ room, state, duration_minutes = 0 }) =>
     request("/api/smart_ac/override", {

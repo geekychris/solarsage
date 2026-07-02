@@ -43,6 +43,12 @@ const CHANNEL_OPTIONS = [
   { id: "telegram", label: "Telegram" },
 ];
 
+function formatTs(ts) {
+  return new Date(ts * 1000).toLocaleString(undefined, {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
+}
+
 function parseOffsets(s) {
   return String(s || "")
     .split(",")
@@ -127,6 +133,8 @@ export default function NotificationsConfig() {
   const sources = Object.keys(SOURCE_META);
   for (const k of Object.keys(config)) if (!sources.includes(k)) sources.push(k);
 
+  const quiet = config.quiet_hours || {};
+
   return (
     <div>
       <div className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
@@ -137,7 +145,64 @@ export default function NotificationsConfig() {
       {err && <div className="error">{err}</div>}
       {saved && <div className="muted" style={{ color: "var(--ok)" }}>{saved}</div>}
 
-      {sources.map((src) => {
+      <div className="notif-source" style={{
+        border: "1px solid var(--border)", borderRadius: 8,
+        padding: 12, marginBottom: 10,
+      }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}>
+          <input
+            type="checkbox"
+            checked={!!quiet.enabled}
+            onChange={(e) => updateSource("quiet_hours",
+              { enabled: e.target.checked })}
+          />
+          Quiet hours
+        </label>
+        <span className="muted" style={{ fontSize: 12 }}>
+          Suppresses noisy channels during a nightly window; other channels still fire.
+        </span>
+        {quiet.enabled && (
+          <div style={{ marginTop: 8, display: "grid",
+                        gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div className="field">
+              <label>Start (HH:MM)</label>
+              <input
+                value={quiet.start ?? "22:00"}
+                onChange={(e) => updateSource("quiet_hours", { start: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label>End (HH:MM)</label>
+              <input
+                value={quiet.end ?? "07:00"}
+                onChange={(e) => updateSource("quiet_hours", { end: e.target.value })}
+              />
+            </div>
+            <div className="field" style={{ gridColumn: "span 2" }}>
+              <label>Mute these channels</label>
+              <div style={{ display: "flex", gap: 12 }}>
+                {CHANNEL_OPTIONS.map((c) => (
+                  <label key={c.id} style={{ display: "flex", gap: 4 }}>
+                    <input
+                      type="checkbox"
+                      checked={(quiet.mute_channels || []).includes(c.id)}
+                      onChange={() => {
+                        const cur = new Set(quiet.mute_channels || []);
+                        if (cur.has(c.id)) cur.delete(c.id); else cur.add(c.id);
+                        updateSource("quiet_hours",
+                          { mute_channels: Array.from(cur) });
+                      }}
+                    />
+                    {c.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {sources.filter((s) => s !== "quiet_hours").map((src) => {
         const meta = SOURCE_META[src] || { label: src, hint: "" };
         const cfg = config[src] || {};
         return (
@@ -166,6 +231,25 @@ export default function NotificationsConfig() {
                 {meta.label}
               </label>
               <span className="muted" style={{ fontSize: 12 }}>{meta.hint}</span>
+              <button
+                type="button"
+                className="notif-test-btn"
+                disabled={busy}
+                title="Fire a test announcement now"
+                onClick={async () => {
+                  setBusy(true); setErr(""); setSaved("");
+                  try {
+                    const r = await api.testAnnouncement(src);
+                    const summary = r.outcomes.map((o) =>
+                      `${o.channel}:${o.ok ? "ok" : (o.detail || "fail")}`).join(", ");
+                    setSaved(`Test → ${summary}`);
+                  } catch (ex) {
+                    setErr(ex.message || "test failed");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >Test</button>
             </div>
 
             {cfg.enabled && (
@@ -353,6 +437,85 @@ export default function NotificationsConfig() {
           {busy ? "Saving…" : "Save"}
         </button>
       </div>
+
+      <HistoryPanel />
+    </div>
+  );
+}
+
+function HistoryPanel() {
+  const [rows, setRows] = useState([]);
+  const [minutes, setMinutes] = useState(15);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function load() {
+    try {
+      const r = await api.announcementHistory(50);
+      setRows(r.history || []);
+    } catch {}
+  }
+  useEffect(() => { load(); }, []);
+
+  async function replay() {
+    setBusy(true); setMsg("");
+    try {
+      const r = await api.replayAnnouncements(minutes);
+      setMsg(`Replayed ${r.replayed} announcement${r.replayed === 1 ? "" : "s"}.`);
+      await load();
+    } catch (ex) {
+      setMsg(ex.message || "replay failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{
+      marginTop: 20, borderTop: "1px solid var(--border)", paddingTop: 12,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <h4 style={{ margin: 0 }}>Recent announcements</h4>
+        <div style={{ flex: 1 }} />
+        <label className="muted" style={{ fontSize: 12 }}>
+          Replay last{" "}
+          <input
+            type="number" min="1" max="1440" style={{ width: 60 }}
+            value={minutes}
+            onChange={(e) => setMinutes(Number(e.target.value))}
+          />{" "}min
+        </label>
+        <button type="button" onClick={replay} disabled={busy}>
+          {busy ? "Replaying…" : "Replay"}
+        </button>
+        <button type="button" onClick={load}>↻</button>
+      </div>
+      {msg && <div className="muted" style={{ fontSize: 11 }}>{msg}</div>}
+      {rows.length === 0 && (
+        <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+          No announcements logged yet.
+        </div>
+      )}
+      {rows.length > 0 && (
+        <table className="notif-history-table">
+          <thead>
+            <tr>
+              <th>When</th><th>Source</th><th>Text</th><th>Channels</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className={r.ok ? "" : "notif-history-fail"}>
+                <td>{formatTs(r.ts)}</td>
+                <td><code>{r.source}</code></td>
+                <td>{r.text}</td>
+                <td>{r.channels.join(", ")}</td>
+                <td>{r.ok ? "✓" : "✗"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

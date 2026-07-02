@@ -30,6 +30,15 @@ INGEST_HORIZON_HOURS = 48
 
 
 DEFAULT_CONFIG: dict[str, Any] = {
+    # Global quiet-hours envelope. During the window, channels in
+    # ``mute_channels`` are suppressed. Telegram is fine at night; TTS
+    # in a bedroom is not. Times are 24-h local ("HH:MM").
+    "quiet_hours": {
+        "enabled": False,
+        "start": "22:00",
+        "end":   "07:00",
+        "mute_channels": ["tts"],
+    },
     "tides": {
         "enabled": False,
         "warn_minutes_before": [120, 30],
@@ -52,6 +61,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "enabled": False,
         "min_magnitude": 4.5,
         "channels": ["telegram"],
+    },
+    "meteor_showers": {
+        "enabled": True,
+        # Fire an event N days ahead and Y hours ahead so you actually
+        # hear about it early enough to plan.
+        "warn_days_before": [3, 1],
+        "channels": ["tts", "telegram"],
     },
     # State-based sources — fire when a live value crosses a
     # threshold. Each source rearms when the value returns to a
@@ -172,6 +188,48 @@ async def ingest_tide_events(
     return n
 
 
+async def ingest_meteor_events(
+    event_store: EventStore,
+    widget_store: Any,
+    config: dict[str, Any],
+) -> int:
+    """Turn the next meteor shower into a scheduled event with reminders
+    when its peak falls inside the ``warn_days_before`` window."""
+    cfg = config.get("meteor_showers") or {}
+    if not cfg.get("enabled"):
+        return 0
+    warn_days = cfg.get("warn_days_before") or [3, 1]
+    channels = cfg.get("channels") or ["tts", "telegram"]
+
+    state = await widget_store.get_state("meteor_showers")
+    if not state or not state.data:
+        return 0
+    nxt = state.data.get("next")
+    if not nxt:
+        return 0
+    try:
+        peak_date = datetime.fromisoformat(nxt["peak_date"] + "T22:00:00")
+    except (KeyError, ValueError, TypeError):
+        return 0
+    # Use local-tz aware
+    peak_local = peak_date.astimezone()
+
+    source_ref = f"meteor:{nxt['name']}:{nxt['peak_date']}"
+    title = f"{nxt['name']} meteor shower peak (ZHR {nxt.get('zhr', '?')})"
+    reminders = [
+        Reminder(id="", event_id="", minutes_before=int(d) * 24 * 60,
+                 mode="+".join(channels) if len(channels) > 1 else channels[0])
+        for d in warn_days
+    ]
+    ev = Event(
+        id="", source="meteor", source_ref=source_ref, title=title,
+        starts_at=peak_local.isoformat(), is_special=True,
+        reminders=reminders,
+    )
+    await event_store.upsert_hoa(ev)
+    return 1
+
+
 async def ingest_all(
     event_store: EventStore,
     widget_store: Any,
@@ -187,6 +245,13 @@ async def ingest_all(
     except Exception:  # noqa: BLE001
         log.exception("tide ingest failed")
         counts["tides"] = 0
+    try:
+        counts["meteor_showers"] = await ingest_meteor_events(
+            event_store, widget_store, cfg,
+        )
+    except Exception:  # noqa: BLE001
+        log.exception("meteor ingest failed")
+        counts["meteor_showers"] = 0
     return counts
 
 
@@ -203,16 +268,78 @@ async def _put_ann_state(widget_store: Any, state: dict[str, Any]) -> None:
     await widget_store.put_config(STATE_ID, state)
 
 
-async def _fire(channels: list[str], text: str) -> None:
-    for ch in channels or ["tts"]:
+def _in_quiet_hours(now, cfg: dict) -> bool:
+    """True if ``now`` (local naive time) falls in the [start, end)
+    window. Handles the common wrap-around case (22:00 → 07:00)."""
+    if not cfg or not cfg.get("enabled"):
+        return False
+    def _parse(s: str, default_h: int) -> tuple[int, int]:
         try:
-            await _notify_dispatch({"type": ch, "text": text})
+            h, m = str(s).split(":")
+            return int(h), int(m)
         except Exception:  # noqa: BLE001
+            return default_h, 0
+    sh, sm = _parse(cfg.get("start", "22:00"), 22)
+    eh, em = _parse(cfg.get("end",   "07:00"),  7)
+    hm = now.hour * 60 + now.minute
+    start = sh * 60 + sm
+    end   = eh * 60 + em
+    if start == end:
+        return False
+    if start < end:
+        return start <= hm < end
+    # Wrap (e.g. 22:00 → 07:00)
+    return hm >= start or hm < end
+
+
+async def _fire(
+    channels: list[str], text: str,
+    *,
+    source: str = "unknown",
+    quiet_cfg: dict | None = None,
+    history_store: Any | None = None,
+) -> None:
+    from datetime import datetime as _dt
+    now_local = _dt.now().astimezone()
+    muted = set()
+    if quiet_cfg and _in_quiet_hours(now_local, quiet_cfg):
+        muted = set(quiet_cfg.get("mute_channels") or [])
+    effective = [c for c in (channels or ["tts"]) if c not in muted]
+    if not effective:
+        # Log the suppressed announcement so it still shows in history.
+        if history_store is not None:
+            try:
+                await history_store.log_announcement(
+                    source, text, list(channels or []), True,
+                    detail="suppressed by quiet_hours",
+                )
+            except Exception:  # noqa: BLE001
+                pass
+        return
+    any_ok = False
+    detail_parts = []
+    for ch in effective:
+        try:
+            res = await _notify_dispatch({"type": ch, "text": text})
+            any_ok = any_ok or bool(res.get("ok"))
+            if not res.get("ok"):
+                detail_parts.append(f"{ch}:{res.get('detail')}")
+        except Exception as exc:  # noqa: BLE001
             log.exception("notify %s failed", ch)
+            detail_parts.append(f"{ch}:{exc}")
+    if history_store is not None:
+        try:
+            await history_store.log_announcement(
+                source, text, effective, any_ok,
+                detail="; ".join(detail_parts) or None,
+            )
+        except Exception:  # noqa: BLE001
+            pass
 
 
 async def check_battery_charged(
     widget_store: Any, cfg_all: dict[str, Any], state_blob: dict[str, Any],
+    history_store: Any | None = None,
 ) -> int:
     cfg = cfg_all.get("battery_charged") or {}
     if not cfg.get("enabled"):
@@ -232,7 +359,12 @@ async def check_battery_charged(
     slot = state_blob.setdefault("battery_charged", {})
     fired = bool(slot.get("fired"))
     if not fired and soc >= threshold:
-        await _fire(channels, f"Battery is fully charged, at {soc:.0f} percent.")
+        await _fire(
+            channels, f"Battery is fully charged, at {soc:.0f} percent.",
+            source="battery_charged",
+            quiet_cfg=cfg_all.get("quiet_hours"),
+            history_store=history_store,
+        )
         slot["fired"] = True
         slot["fired_at"] = datetime.now(timezone.utc).isoformat()
         slot["at_soc"] = soc
@@ -245,6 +377,7 @@ async def check_battery_charged(
 
 async def check_excessive_discharge(
     widget_store: Any, cfg_all: dict[str, Any], state_blob: dict[str, Any],
+    history_store: Any | None = None,
 ) -> int:
     cfg = cfg_all.get("excessive_discharge") or {}
     if not cfg.get("enabled"):
@@ -286,6 +419,9 @@ async def check_excessive_discharge(
                 channels,
                 f"Heavy load — the battery is discharging at "
                 f"{kw:.1f} kilowatts.",
+                source="excessive_discharge",
+                quiet_cfg=cfg_all.get("quiet_hours"),
+                history_store=history_store,
             )
             slot["fired"] = True
             slot["fired_at"] = now_iso
@@ -301,6 +437,7 @@ async def check_excessive_discharge(
 
 async def check_water_low(
     widget_store: Any, cfg_all: dict[str, Any], state_blob: dict[str, Any],
+    history_store: Any | None = None,
 ) -> int:
     cfg = cfg_all.get("water_low") or {}
     if not cfg.get("enabled"):
@@ -338,6 +475,9 @@ async def check_water_low(
                 channels,
                 f"Water tank is at {percent:.0f} percent{days_str}. "
                 f"Consider ordering a refill.",
+                source="water_low",
+                quiet_cfg=cfg_all.get("quiet_hours"),
+                history_store=history_store,
             )
             fired_at_percent[key] = datetime.now(timezone.utc).isoformat()
             fired_count += 1
@@ -348,6 +488,7 @@ async def check_water_low(
 
 async def run_state_checks(
     widget_store: Any, saved_config: dict[str, Any] | None,
+    history_store: Any | None = None,
 ) -> dict[str, int]:
     cfg = merged_config(saved_config)
     state_blob = await _get_ann_state(widget_store)
@@ -358,7 +499,9 @@ async def run_state_checks(
         ("water_low", check_water_low),
     ):
         try:
-            counts[name] = await fn(widget_store, cfg, state_blob)
+            counts[name] = await fn(
+                widget_store, cfg, state_blob, history_store=history_store,
+            )
         except Exception:  # noqa: BLE001
             log.exception("%s state check failed", name)
             counts[name] = 0

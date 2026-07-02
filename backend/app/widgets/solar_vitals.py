@@ -283,6 +283,7 @@ class SolarVitalsWidget(Widget):
     refresh_seconds = 60
     default_tab = "Solar"
     default_position = 3
+    default_width = 2   # dense widget; gets a 2-column span by default
 
     # smart_ac + calibration entities are fixed by convention; the
     # per-room booleans are derived dynamically from ``smart_ac_rooms``

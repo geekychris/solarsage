@@ -123,7 +123,11 @@ def _parse_iso_aware(s: str) -> datetime:
     return dt
 
 
-async def _fire_due_reminders(store: EventStore) -> None:
+async def _fire_due_reminders(
+    store: EventStore,
+    history_store: Any | None = None,
+    quiet_cfg: dict | None = None,
+) -> None:
     now = datetime.now(timezone.utc).astimezone()
     window_floor = now - timedelta(seconds=TICK_SECONDS + 5)
     events = await store.list_events(starts_after=now.isoformat())
@@ -151,8 +155,18 @@ async def _fire_due_reminders(store: EventStore) -> None:
                 "reminder firing: event=%s mins_before=%s channels=%s text=%r",
                 ev.id, r.minutes_before, channels, text,
             )
+            # Respect quiet-hours (if provided) by dropping muted
+            # channels. We still log the announcement to history.
+            muted: set[str] = set()
+            if quiet_cfg:
+                from .. import announcements as _ann
+                now_local_ann = datetime.now().astimezone()
+                if _ann._in_quiet_hours(now_local_ann, quiet_cfg):
+                    muted = set(quiet_cfg.get("mute_channels") or [])
+            effective_channels = [c for c in channels if c not in muted]
             any_ok = False
-            for ch in channels:
+            detail_parts = []
+            for ch in effective_channels:
                 res = await notify_dispatch({"type": ch, "text": text})
                 any_ok = any_ok or bool(res.get("ok"))
                 if not res.get("ok"):
@@ -160,6 +174,22 @@ async def _fire_due_reminders(store: EventStore) -> None:
                         "reminder %s: channel %s failed: %s",
                         r.id, ch, res.get("detail"),
                     )
+                    detail_parts.append(f"{ch}:{res.get('detail')}")
+            if history_store is not None:
+                try:
+                    await history_store.log_announcement(
+                        f"event:{ev.source or 'manual'}",
+                        text,
+                        effective_channels or list(channels),
+                        any_ok or not effective_channels,
+                        detail=(
+                            "; ".join(detail_parts) or None
+                            if effective_channels
+                            else "suppressed by quiet_hours"
+                        ),
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
             # Mark fired even on channel failure — better to skip than
             # spam the user every minute trying to re-fire.
             await store.mark_fired(r.id, _time.time())
@@ -193,15 +223,18 @@ async def _ingest_announcements(
         log.info("announcements ingest: %s", counts)
 
 
-async def _run_state_checks(widget_store: Any) -> None:
+async def _run_state_checks(widget_store: Any, history_store: Any = None) -> None:
     saved = await widget_store.get_config(announcements_mod.CONFIG_ID) or {}
-    counts = await announcements_mod.run_state_checks(widget_store, saved)
+    counts = await announcements_mod.run_state_checks(
+        widget_store, saved, history_store=history_store,
+    )
     if any(counts.values()):
         log.info("state announcements fired: %s", counts)
 
 
 async def run_reminder_scheduler(
     store: EventStore, widget_store: Any,
+    history_store: Any | None = None,
 ) -> None:
     """Top-level scheduler task: ingest + fire on the same loop."""
     last_ingest = 0.0
@@ -214,10 +247,19 @@ async def run_reminder_scheduler(
                 await _ingest_once(store, widget_store)
                 await _ingest_announcements(store, widget_store)
                 last_ingest = now
-            await _fire_due_reminders(store)
+            # Pull the current quiet_hours config once per tick and
+            # pass it down to both dispatch paths.
+            saved = await widget_store.get_config(
+                announcements_mod.CONFIG_ID,
+            ) or {}
+            merged = announcements_mod.merged_config(saved)
+            quiet_cfg = merged.get("quiet_hours")
+            await _fire_due_reminders(
+                store, history_store=history_store, quiet_cfg=quiet_cfg,
+            )
             # State-based announcements — cheap; run every tick so a
             # sudden discharge / low water triggers quickly.
-            await _run_state_checks(widget_store)
+            await _run_state_checks(widget_store, history_store=history_store)
         except asyncio.CancelledError:
             return
         except Exception:  # noqa: BLE001

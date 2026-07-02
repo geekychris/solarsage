@@ -1,0 +1,15 @@
+# SolarSage Prometheus scrape config
+# Install: sudo cp scripts/prometheus.yml.example /etc/prometheus/prometheus.yml
+# Then:    sudo systemctl restart prometheus
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: solarsage
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["localhost:8000"]
+        labels:
+          instance: pi-sf

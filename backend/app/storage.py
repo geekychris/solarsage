@@ -74,6 +74,17 @@ CREATE TABLE IF NOT EXISTS web_sessions (
   username TEXT NOT NULL,
   created_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS announcement_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts REAL NOT NULL,
+  source TEXT NOT NULL,
+  text TEXT NOT NULL,
+  channels TEXT NOT NULL,
+  ok INTEGER NOT NULL,
+  detail TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_announcement_history_recent
+  ON announcement_history(ts DESC);
 """
 
 # Run after CREATE TABLE — adds site_id to existing tables for users
@@ -579,6 +590,57 @@ class History:
         async with aiosqlite.connect(self.db_path) as db:
             cur = await db.execute(
                 "DELETE FROM web_sessions WHERE created_at < ?", (cutoff,),
+            )
+            await db.commit()
+            return cur.rowcount or 0
+
+    # ------------------------- announcement history ------------------------
+    async def log_announcement(
+        self, source: str, text: str, channels: list[str], ok: bool,
+        detail: str | None = None,
+    ) -> None:
+        import time as _time
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "INSERT INTO announcement_history(ts, source, text, channels, ok, detail) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (_time.time(), source, text, ",".join(channels or []),
+                 int(bool(ok)), detail),
+            )
+            await db.commit()
+
+    async def recent_announcements(
+        self, limit: int = 100, since_seconds: float | None = None,
+    ) -> list[dict]:
+        import time as _time
+        params: tuple = ()
+        where = ""
+        if since_seconds:
+            where = "WHERE ts >= ?"
+            params = (_time.time() - since_seconds,)
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute(
+                "SELECT id, ts, source, text, channels, ok, detail "
+                "FROM announcement_history "
+                f"{where} ORDER BY ts DESC LIMIT ?",
+                params + (limit,),
+            )
+            rows = await cur.fetchall()
+        return [
+            {
+                "id": r[0], "ts": r[1], "source": r[2], "text": r[3],
+                "channels": r[4].split(",") if r[4] else [],
+                "ok": bool(r[5]), "detail": r[6],
+            }
+            for r in rows
+        ]
+
+    async def prune_announcements(self, older_than_seconds: float = 30 * 86400) -> int:
+        import time as _time
+        cutoff = _time.time() - older_than_seconds
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute(
+                "DELETE FROM announcement_history WHERE ts < ?", (cutoff,),
             )
             await db.commit()
             return cur.rowcount or 0

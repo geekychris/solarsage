@@ -1830,6 +1830,105 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
   background: none; border: 1px solid var(--border, #232a35);
   border-radius: 3px; color: #ef6f6c;
 }
+.notif-test-btn {
+  margin-left: auto; padding: 2px 8px; font-size: 11px;
+  cursor: pointer; background: rgba(255,255,255,0.05);
+  color: inherit; border: 1px solid var(--border, #232a35);
+  border-radius: 3px;
+}
+.notif-history-table {
+  width: 100%; margin-top: 8px; font-size: 11px; border-collapse: collapse;
+}
+.notif-history-table th, .notif-history-table td {
+  text-align: left; padding: 4px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  vertical-align: top;
+}
+.notif-history-table th { font-weight: 600; color: var(--muted, #888); }
+.notif-history-fail { opacity: 0.6; color: #ef6f6c; }
+
+/* Peak load + forecast accuracy shared */
+.peak-load-row, .fc-summary {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px; margin-bottom: 8px;
+}
+.peak-load-big, .fc-big { font-size: 22px; font-weight: 700; }
+.fc-plus { color: #6fdc8c; }
+.fc-minus { color: #ef6f6c; }
+.peak-load-svg, .fc-svg {
+  display: block; background: rgba(255,255,255,0.03); border-radius: 4px;
+}
+
+/* Sky tonight */
+.sky-summary {
+  display: flex; gap: 16px; margin-bottom: 8px;
+}
+.sky-big { font-size: 20px; font-weight: 700; }
+.sky-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.sky-table th, .sky-table td {
+  text-align: left; padding: 4px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.sky-below { opacity: 0.4; }
+
+/* Meteor showers */
+.meteor-hero {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px; border-radius: 6px;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(255,255,255,0.03);
+}
+.meteor-hero.soon {
+  border-color: #ffd166;
+  background: rgba(255,209,102,0.10);
+}
+.meteor-name { font-size: 18px; font-weight: 700; margin: 2px 0; }
+.meteor-zhr-big { font-size: 28px; font-weight: 800; }
+.meteor-table { width: 100%; font-size: 12px; margin-top: 4px; }
+.meteor-table td { padding: 3px 6px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+/* Bird migration */
+.bird-summary { display: flex; gap: 16px; font-size: 13px; margin-bottom: 8px; }
+.bird-big { font-size: 22px; font-weight: 700; }
+.bird-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.bird-table td {
+  padding: 6px 4px; vertical-align: top;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.bird-peak td:first-child { color: #ffd166; }
+
+/* Info icon → button (was span) */
+.info-icon {
+  background: none; border: none; padding: 0 4px;
+  color: inherit; opacity: 0.6; cursor: pointer; font-size: 13px;
+}
+.info-icon:hover { opacity: 1; }
+
+/* Widget action button as anchor */
+.widget-btn-link {
+  padding: 2px 8px; font-size: 14px; cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--border, #232a35); border-radius: 3px;
+  color: inherit; text-decoration: none; line-height: 1.4;
+}
+.widget-btn-link:hover { background: rgba(255,255,255,0.05); }
+
+/* Compact mode */
+.widget-card.widget-compact .widget-body {
+  max-height: 240px;
+  overflow: hidden;
+  position: relative;
+}
+.widget-card.widget-compact .widget-body::after {
+  content: "";
+  position: absolute; left: 0; right: 0; bottom: 0; height: 30px;
+  background: linear-gradient(180deg, transparent, var(--panel, #181c22));
+  pointer-events: none;
+}
+.widget-card.widget-compact .widget-body > * { transform-origin: top left; }
+.widget-head-meta button.active {
+  background: rgba(108,209,255,0.2); color: #6cd1ff;
+}
 .ha-subsection {
   margin-top: 14px; padding-top: 10px;
   border-top: 1px solid var(--border, #232a35);

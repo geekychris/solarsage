@@ -66,6 +66,11 @@ from .widgets.sunset import SunsetWidget
 from .widgets.acpv_overlay import AcPvOverlayWidget
 from .widgets.when_to_run import WhenToRunWidget
 from .widgets.climate_chart import ClimateChartWidget
+from .widgets.peak_load import PeakLoadWidget
+from .widgets.forecast_accuracy import ForecastAccuracyWidget
+from .widgets.sky_tonight import SkyTonightWidget
+from .widgets.meteor_showers import MeteorShowersWidget
+from .widgets.bird_migration import BirdMigrationWidget
 from .widgets.property_mode import PropertyModeWidget
 from .widgets.news import NewsWidget
 from .widgets.reservations import ReservationsWidget
@@ -183,6 +188,11 @@ def _register_builtin_widgets() -> None:
         AcPvOverlayWidget(),
         WhenToRunWidget(),
         ClimateChartWidget(),
+        PeakLoadWidget(),
+        ForecastAccuracyWidget(),
+        SkyTonightWidget(),
+        MeteorShowersWidget(),
+        BirdMigrationWidget(),
         PropertyTaxWidget(),
         ContactsWidget(),
         TodoWidget(),
@@ -312,7 +322,7 @@ async def lifespan(app: FastAPI):
         len(list(widget_registry.all())), "on" if mqtt else "off",
     )
     events_task = asyncio.create_task(
-        run_reminder_scheduler(event_store, widget_store)
+        run_reminder_scheduler(event_store, widget_store, history_store=history)
     )
     log.info("event reminder scheduler started")
     yield
@@ -1869,8 +1879,10 @@ async def _widget_payload(w, *, include_data: bool = True) -> dict[str, Any]:
     layout = {
         "tab": config.get("_tab") or w.default_tab,
         "position": int(config.get("_position", w.default_position)),
-        "width":  max(1, min(3, int(config.get("_width",  1)))),
-        "height": max(1, min(3, int(config.get("_height", 1)))),
+        "width":  max(1, min(3, int(config.get("_width",
+                                              getattr(w, "default_width", 1))))),
+        "height": max(1, min(3, int(config.get("_height",
+                                               getattr(w, "default_height", 1))))),
     }
     body: dict[str, Any] = {
         "meta": w.meta(),
@@ -2010,6 +2022,209 @@ async def put_widget_config(
         "fetched_at": state.fetched_at if state else None,
         "error": state.error if state else None,
     }
+
+
+@app.get(
+    "/api/widgets/{widget_id}/export.csv",
+    tags=["widgets"],
+    summary="Export the widget's cached data as CSV",
+)
+async def export_widget_csv(
+    widget_id: str,
+    _: Session | None = Depends(require_read),
+):
+    """Streams whatever's in the widget's cached data as CSV. Generic
+    shape detection: (1) if the payload has a key whose value is a
+    non-empty list of dicts, that becomes the rows; (2) otherwise the
+    top-level dict is written as a single row of scalars. Widgets with
+    an unusual shape can implement a ``csv_export(data)`` method
+    returning ``(columns, rows)`` and it wins over generic detection."""
+    import csv, io
+    w = _require_widget(widget_id)
+    state = await widget_store.get_state(w.id)
+    if not state or not state.data:
+        raise HTTPException(status_code=404, detail="no cached data")
+    data = state.data
+    columns: list[str]; rows: list[list]
+    hook = getattr(w, "csv_export", None)
+    if callable(hook):
+        columns, rows = hook(data)
+    else:
+        columns, rows = _widget_data_to_csv(data)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(columns)
+    writer.writerows(rows)
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(
+        buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{widget_id}.csv"'},
+    )
+
+
+def _widget_data_to_csv(data: Any) -> tuple[list[str], list[list]]:
+    if isinstance(data, dict):
+        # Prefer the first key mapping to a non-empty list of dicts
+        for key, val in data.items():
+            if isinstance(val, list) and val and isinstance(val[0], dict):
+                columns = sorted({
+                    k for item in val for k in item.keys()
+                    if not isinstance(item.get(k), (list, dict))
+                })
+                out_rows = [
+                    [_scalar(item.get(c)) for c in columns] for item in val
+                ]
+                return columns, out_rows
+        # Fall back to a single row of scalars
+        columns, values = [], []
+        for k, v in data.items():
+            if isinstance(v, (str, int, float, bool)) or v is None:
+                columns.append(k); values.append(_scalar(v))
+        return columns, [values]
+    if isinstance(data, list) and data and isinstance(data[0], dict):
+        columns = sorted({k for item in data for k in item.keys()})
+        return columns, [[_scalar(item.get(c)) for c in columns] for item in data]
+    return ["value"], [[str(data)]]
+
+
+def _scalar(v: Any) -> Any:
+    if isinstance(v, (list, dict)):
+        return json.dumps(v)
+    return "" if v is None else v
+
+
+@app.get(
+    "/metrics",
+    tags=["metrics"],
+    summary="Prometheus text-format metrics",
+    include_in_schema=False,
+)
+async def prometheus_metrics():
+    """No auth — for Prometheus scrapes. Bind Prometheus to localhost
+    or firewall this port if you're paranoid."""
+    from fastapi.responses import PlainTextResponse
+    import time as _time
+    lines: list[str] = []
+
+    def gauge(name: str, help_text: str, samples: list[tuple[dict, float]]):
+        if not samples:
+            return
+        lines.append(f"# HELP {name} {help_text}")
+        lines.append(f"# TYPE {name} gauge")
+        for labels, value in samples:
+            lbl = ",".join(f'{k}="{v}"' for k, v in labels.items())
+            lines.append(f"{name}{{{lbl}}} {value}" if lbl else f"{name} {value}")
+
+    now = _time.time()
+
+    # Per-widget health
+    fetched_age_samples: list[tuple[dict, float]] = []
+    error_samples: list[tuple[dict, float]] = []
+    for w in widget_registry.all():
+        state = await widget_store.get_state(w.id)
+        if state and state.fetched_at:
+            fetched_age_samples.append(
+                ({"widget": w.id}, round(now - float(state.fetched_at), 1))
+            )
+        error_samples.append(
+            ({"widget": w.id},
+             1 if (state and state.error) else 0)
+        )
+    gauge(
+        "solarsage_widget_last_refresh_seconds",
+        "Seconds since widget's last successful fetch",
+        fetched_age_samples,
+    )
+    gauge(
+        "solarsage_widget_error",
+        "1 if widget has an error, 0 otherwise",
+        error_samples,
+    )
+
+    # Solar telemetry from solar_vitals cached data
+    sv = await widget_store.get_state("solar_vitals")
+    if sv and sv.data and not sv.error:
+        d = sv.data
+        batt = d.get("battery") or {}
+        solar = d.get("solar") or {}
+        load = d.get("load") or {}
+        bf = d.get("battery_flow") or {}
+        for name, help_text, val in [
+            ("solarsage_battery_soc_percent",
+             "Battery state of charge (%)", batt.get("soc")),
+            ("solarsage_battery_capacity_kwh",
+             "Battery bank capacity (kWh)", batt.get("capacity_kwh")),
+            ("solarsage_battery_kwh_remaining",
+             "Battery kWh remaining", batt.get("kwh_remaining")),
+            ("solarsage_solar_kw",
+             "Live solar production (kW)", solar.get("total_kw")),
+            ("solarsage_load_kw",
+             "Live house load (kW)", load.get("kw")),
+            ("solarsage_battery_charge_kw",
+             "Battery charging rate (kW)", bf.get("charge_kw")),
+            ("solarsage_battery_discharge_kw",
+             "Battery discharging rate (kW)", bf.get("discharge_kw")),
+        ]:
+            if val is not None:
+                gauge(name, help_text, [({}, float(val))])
+        for st in solar.get("strings") or []:
+            gauge(
+                "solarsage_solar_string_kw",
+                "Per-string PV production (kW)",
+                [({"string": str(st.get("n"))}, float(st.get("kw") or 0))],
+            )
+        for r in (load.get("smart_ac_rooms") or []):
+            gauge(
+                "solarsage_ac_room_watts",
+                "smart_ac room shown watts",
+                [({"room": r.get("room", "")}, float(r.get("watts") or 0))],
+            )
+            gauge(
+                "solarsage_ac_room_on",
+                "smart_ac room on/off (1/0)",
+                [({"room": r.get("room", "")}, 1 if r.get("on") else 0)],
+            )
+        for t in (load.get("room_sensors") or []):
+            if t.get("temp_value") is not None:
+                gauge(
+                    "solarsage_room_temperature",
+                    "Room temperature",
+                    [({"room": t.get("name", ""),
+                       "unit": t.get("temp_unit", "")},
+                      float(t["temp_value"]))],
+                )
+            if t.get("humidity_value") is not None:
+                gauge(
+                    "solarsage_room_humidity_percent",
+                    "Room relative humidity",
+                    [({"room": t.get("name", "")},
+                      float(t["humidity_value"]))],
+                )
+
+    # Water tank
+    wt = await widget_store.get_state("water_tank")
+    if wt and wt.data and not wt.error:
+        d = wt.data
+        for name, help_text, val in [
+            ("solarsage_water_percent", "Water tank percent full",
+             d.get("percent")),
+            ("solarsage_water_gallons", "Water tank estimated gallons",
+             d.get("gallons")),
+            ("solarsage_water_gallons_per_day",
+             "Water usage rate (gal/day)", d.get("gal_per_day")),
+            ("solarsage_water_days_remaining",
+             "Days until tank hits empty at current usage",
+             d.get("days_remaining")),
+        ]:
+            if val is not None:
+                gauge(name, help_text, [({}, float(val))])
+
+    lines.append("")  # trailing newline
+    return PlainTextResponse(
+        "\n".join(lines),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 @app.post(
@@ -2528,6 +2743,86 @@ async def force_announcements_ingest(_: Session | None = Depends(require_read)):
     saved = await widget_store.get_config(ann.CONFIG_ID) or {}
     counts = await ann.ingest_all(event_store, widget_store, saved)
     return {"ingested": counts}
+
+
+@app.get(
+    "/api/announcements/history",
+    tags=["announcements"],
+    summary="Recent announcement log entries (all sources)",
+)
+async def get_announcement_history(
+    limit: int = 100,
+    minutes: int | None = None,
+    _: Session | None = Depends(require_read),
+):
+    """Recent announcements as JSON. ``minutes`` filters to the last
+    N minutes; without it, returns the last ``limit`` rows."""
+    since = minutes * 60 if minutes else None
+    rows = await history.recent_announcements(limit=limit, since_seconds=since)
+    return {"history": rows}
+
+
+@app.post(
+    "/api/announcements/replay",
+    tags=["announcements"],
+    summary="Re-fire announcements from the last N minutes",
+)
+async def replay_announcements(
+    minutes: int = 15,
+    channels: list[str] | None = None,
+    _: Session | None = Depends(require_read),
+):
+    """Re-fires every announcement from the last N minutes. Optionally
+    override the channels list — e.g. replay only via Telegram when the
+    original went to TTS and you missed it."""
+    from . import notify as notify_mod
+    if minutes <= 0 or minutes > 24 * 60:
+        raise HTTPException(status_code=400, detail="minutes must be 1..1440")
+    rows = await history.recent_announcements(limit=200, since_seconds=minutes * 60)
+    replayed = 0
+    for row in rows:
+        chans = channels if channels else row["channels"]
+        for ch in chans:
+            await notify_mod.dispatch({"type": ch, "text": row["text"]})
+        await history.log_announcement(
+            f"replay:{row['source']}", row["text"], chans, True,
+            detail=f"replay of #{row['id']} from {row['ts']}",
+        )
+        replayed += 1
+    return {"replayed": replayed}
+
+
+@app.post(
+    "/api/announcements/test",
+    tags=["announcements"],
+    summary="Fire a synthetic test announcement for one source",
+)
+async def test_announcement(
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Body: ``{"source": "tides"}``. Dispatches a "test message" via
+    the configured channels for that source so the user can verify TTS
+    + Telegram are actually working without waiting for a real event."""
+    from . import announcements as ann
+    from . import notify as notify_mod
+    source = str(body.get("source") or "").strip()
+    if not source:
+        raise HTTPException(status_code=400, detail="source required")
+    saved = await widget_store.get_config(ann.CONFIG_ID) or {}
+    cfg = ann.merged_config(saved).get(source) or {}
+    channels = cfg.get("channels") or ["tts"]
+    text = f"SolarSage test — {source} channel check."
+    outcomes = []
+    for ch in channels:
+        res = await notify_mod.dispatch({"type": ch, "text": text})
+        outcomes.append({"channel": ch, **res})
+    await history.log_announcement(
+        f"test:{source}", text, channels,
+        all(o.get("ok") for o in outcomes),
+        detail=None,
+    )
+    return {"source": source, "text": text, "outcomes": outcomes}
 
 
 # ---------------------------------------------------------------------------

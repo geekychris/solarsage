@@ -42,6 +42,11 @@ import SunsetWidget from "./widgets/SunsetWidget.jsx";
 import AcPvOverlayWidget from "./widgets/AcPvOverlayWidget.jsx";
 import WhenToRunWidget from "./widgets/WhenToRunWidget.jsx";
 import ClimateChartWidget from "./widgets/ClimateChartWidget.jsx";
+import PeakLoadWidget from "./widgets/PeakLoadWidget.jsx";
+import ForecastAccuracyWidget from "./widgets/ForecastAccuracyWidget.jsx";
+import SkyTonightWidget from "./widgets/SkyTonightWidget.jsx";
+import MeteorShowersWidget from "./widgets/MeteorShowersWidget.jsx";
+import BirdMigrationWidget from "./widgets/BirdMigrationWidget.jsx";
 import WidgetSettings from "./WidgetSettings.jsx";
 
 const RENDERERS = {
@@ -85,6 +90,11 @@ const RENDERERS = {
   acpv_overlay: AcPvOverlayWidget,
   when_to_run: WhenToRunWidget,
   climate_chart: ClimateChartWidget,
+  peak_load: PeakLoadWidget,
+  forecast_accuracy: ForecastAccuracyWidget,
+  sky_tonight: SkyTonightWidget,
+  meteor_showers: MeteorShowersWidget,
+  bird_migration: BirdMigrationWidget,
 };
 
 // Stable order for subtabs when more than one is present.
@@ -162,6 +172,17 @@ function WidgetCard({ widget, tzOffsetMinutes, onRefreshed, allTabs, onMove }) {
   const Renderer = RENDERERS[widget.meta.kind];
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const compactKey = `eg4.widget.${widget.id}.compact`;
+  const [compact, setCompactState] = useState(() =>
+    localStorage.getItem(compactKey) === "1"
+  );
+  function toggleCompact() {
+    const next = !compact;
+    setCompactState(next);
+    if (next) localStorage.setItem(compactKey, "1");
+    else localStorage.removeItem(compactKey);
+  }
   const refresh = useCallback(async () => {
     setBusy(true);
     try {
@@ -173,21 +194,33 @@ function WidgetCard({ widget, tzOffsetMinutes, onRefreshed, allTabs, onMove }) {
   }, [widget.id, onRefreshed]);
 
   return (
-    <div className="panel widget-card">
+    <div className={`panel widget-card ${compact ? "widget-compact" : ""}`}>
       <div className="widget-head">
         <div className="widget-title">
           <h3 style={{ margin: 0 }}>{widget.meta.name}</h3>
-          <span
+          <button
             className="info-icon"
-            title={widget.meta.description}
+            title="What is this?"
             aria-label="About this widget"
-          >ⓘ</span>
+            onClick={() => setHelpOpen(true)}
+          >ⓘ</button>
         </div>
         <div className="widget-head-meta">
           <FetchedAt ts={widget.fetched_at} error={widget.error} />
           <button onClick={refresh} disabled={busy} title="Refresh now">
             {busy ? "…" : "↻"}
           </button>
+          <button
+            onClick={toggleCompact}
+            className={compact ? "active" : ""}
+            title={compact ? "Expand" : "Compact"}
+          >{compact ? "▤" : "▥"}</button>
+          <a
+            href={`/api/widgets/${widget.id}/export.csv`}
+            download={`${widget.id}.csv`}
+            title="Export as CSV"
+            className="widget-btn-link"
+          >⤓</a>
           <button onClick={() => setSettingsOpen(true)} title="Settings">⚙</button>
           <MoveControls widget={widget} allTabs={allTabs} onMove={onMove} />
         </div>
@@ -217,6 +250,37 @@ function WidgetCard({ widget, tzOffsetMinutes, onRefreshed, allTabs, onMove }) {
           onClose={() => setSettingsOpen(false)}
           onSaved={onRefreshed}
         />
+      )}
+      {helpOpen && (
+        <div className="modal-backdrop" onClick={() => setHelpOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>{widget.meta.name}</h3>
+            <div className="muted" style={{ fontSize: 11, marginBottom: 8 }}>
+              <code>{widget.meta.kind}</code> · refresh every {widget.meta.refresh_seconds >= 3600
+                ? `${Math.round(widget.meta.refresh_seconds / 3600)} h`
+                : `${Math.round(widget.meta.refresh_seconds / 60)} min`}
+              {" · tab "}{widget.layout?.tab}
+            </div>
+            <p style={{ lineHeight: 1.5 }}>{widget.meta.description}</p>
+            {widget.error && (
+              <div className="error" style={{ marginTop: 8 }}>
+                Last fetch error: {widget.error}
+              </div>
+            )}
+            <details style={{ marginTop: 12 }}>
+              <summary className="muted" style={{ cursor: "pointer" }}>
+                Raw metadata
+              </summary>
+              <pre style={{
+                fontSize: 11, maxHeight: 260, overflow: "auto",
+                background: "rgba(0,0,0,0.3)", padding: 8, borderRadius: 4,
+              }}>{JSON.stringify(widget.meta, null, 2)}</pre>
+            </details>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+              <button onClick={() => setHelpOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

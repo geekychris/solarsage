@@ -36,6 +36,10 @@ class Widget:
     # config; the UI groups by ``tab`` and orders within a tab by ``position``.
     default_tab: str = "Local"
     default_position: int = 100
+    # Widget default column/row span. Users can override via the
+    # widget-header size popover, which writes to the layout row.
+    default_width: int = 1
+    default_height: int = 1
     # JSON-schema-ish hint of what ``data`` looks like — informational only,
     # not validated. Helps the LLM know what fields to ask about.
     data_schema: dict[str, Any] = {}
