@@ -1801,6 +1801,40 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
   margin: 0 0 6px 0; font-size: 13px; font-weight: 700;
 }
 
+/* Climate chart */
+.climate-toolbar {
+  display: flex; gap: 12px; align-items: center;
+  font-size: 12px; margin-bottom: 4px; flex-wrap: wrap;
+}
+.climate-toolbar-note { font-size: 11px; margin-left: auto; }
+.climate-window, .climate-kind {
+  display: inline-flex; gap: 2px;
+  border: 1px solid var(--border, #232a35); border-radius: 4px;
+  padding: 2px; background: rgba(255,255,255,0.03);
+}
+.climate-window button, .climate-kind button {
+  padding: 4px 10px; font-size: 11px;
+  background: transparent; color: inherit;
+  border: none; border-radius: 3px; cursor: pointer;
+}
+.climate-window button.active, .climate-kind button.active {
+  background: rgba(108,209,255,0.2); color: #6cd1ff; font-weight: 600;
+}
+.climate-svg { display: block; background: rgba(255,255,255,0.02); border-radius: 4px; }
+.climate-legend {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 4px 12px; margin-top: 6px; font-size: 12px;
+}
+.climate-leg-row {
+  display: flex; align-items: center; gap: 6px;
+}
+.climate-swatch { width: 10px; height: 10px; border-radius: 2px; }
+.climate-val { font-variant-numeric: tabular-nums; }
+.climate-val-hum { opacity: 0.85; }
+.climate-hover-time {
+  grid-column: 1 / -1; font-size: 11px; margin-top: 2px;
+}
+
 /* Water tank */
 .water-tank-top {
   display: flex; gap: 16px; align-items: center; margin-bottom: 8px;

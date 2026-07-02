@@ -41,6 +41,7 @@ import WaterTankWidget from "./widgets/WaterTankWidget.jsx";
 import SunsetWidget from "./widgets/SunsetWidget.jsx";
 import AcPvOverlayWidget from "./widgets/AcPvOverlayWidget.jsx";
 import WhenToRunWidget from "./widgets/WhenToRunWidget.jsx";
+import ClimateChartWidget from "./widgets/ClimateChartWidget.jsx";
 import WidgetSettings from "./WidgetSettings.jsx";
 
 const RENDERERS = {
@@ -83,6 +84,7 @@ const RENDERERS = {
   sunset: SunsetWidget,
   acpv_overlay: AcPvOverlayWidget,
   when_to_run: WhenToRunWidget,
+  climate_chart: ClimateChartWidget,
 };
 
 // Stable order for subtabs when more than one is present.
