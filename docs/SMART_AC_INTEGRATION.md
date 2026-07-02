@@ -8,15 +8,20 @@ for future sessions to discover.
 
 ## Sibling repo
 
-Everything below is *implemented* in the homeassistant repo:
+Everything below is *implemented* in the public toolkit:
 
-- **GitHub**: https://github.com/geekychris/homeassistant_work_sanfelipe
-- **Local clone**: `~/code/claude_world/homeassistant`
+- **GitHub**: https://github.com/geekychris/ha-house-tools
+- **Local clone**: `~/code/claude_world/ha-house-tools` (or wherever you cloned it)
 
 This SolarSage repo (`github.com/geekychris/solarsage`) is the *consumer*.
 When making changes that touch AC control, keep the two repos in sync —
-if you add an entity or change semantics, update this doc *and* mention it
-in the homeassistant repo's README (which links back here).
+if you add an entity or change semantics, update this doc *and* the
+ha-house-tools `docs/SMART_AC.md` reference.
+
+(The `homeassistant_work_sanfelipe` repo remains private and holds the
+San Felipe-specific inventory: tokens, real entity IDs, `smart_ac.json`
+with the actual room slugs / wattages. The public `ha-house-tools`
+holds the reusable code with example placeholders.)
 
 **What SolarSage now does with smart_ac** (as of 2026-07):
 
