@@ -14,6 +14,21 @@ The endpoints below are the highlights. Authentication is either:
   endpoints accept the key; endpoints that talk to EG4 need a live
   session.
 
+**Session persistence across restarts.** Bearer tokens issued by
+`/api/login` (and the internal auto-login on startup) are written to
+the `web_sessions` sqlite table alongside their username. On an
+in-memory miss during auth, the server looks the token up in the
+table and, if it belongs to the currently-auto-logged-in user, remaps
+to that live session. That means a browser's stored token keeps
+working across `uvicorn` restarts — no forced re-login.
+
+**Integration secrets in settings.** `HA_URL`, `HA_TOKEN`,
+`TTS_URL`, `NOTIFY_TELEGRAM_SERVICE`, `NOTIFY_TELEGRAM_TARGET`,
+`WORLDTIDES_API_KEY`, and `EIA_API_KEY` are now editable via
+`PUT /api/settings` and their values mirror to `os.environ` on
+startup + save. Env vars remain the fallback when the DB value is
+empty, so nothing breaks if you never touch the UI.
+
 ## Solar (existing)
 
 | Endpoint | Description |
@@ -48,8 +63,44 @@ The endpoints below are the highlights. Authentication is either:
 | `GET /api/widgets/<id>/data` | Just the cached data |
 | `GET /api/widgets/<id>/config` | Effective + default config |
 | `PUT /api/widgets/<id>/config` | Update config (writes to Sheets when applicable) |
-| `PUT /api/widgets/<id>/layout` | Move to another tab or reorder |
+| `PUT /api/widgets/<id>/layout` | Move to another tab, reorder, or resize. Body: `{tab, position, width, height}`. `width` + `height` are grid-cell spans in [1..3] — persists per-widget in `widget_config`. |
 | `POST /api/widgets/<id>/refresh` | Force immediate refresh |
+
+## Home Assistant integrations
+
+Per-widget entity binding + entity search. Each widget declares an
+`ha_entities` list (see `docs/WIDGETS.md`); the endpoints below let the
+UI show live values and rebind an entity_id without touching JSON.
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/ha/integrations` | List every widget's declared HA entities + current live state pulled from HA in one call. Includes dynamic read-only rows (per-room smart_ac booleans, per-appliance entities). |
+| `PUT /api/ha/integrations/<widget_id>` | Rebind entity IDs for one widget. Body: `{key: entity_id, ...}` — only class-declared static keys are editable; each entity_id is validated against HA before saving. |
+| `GET /api/ha/entities?q=<substr>&domain=<sensor>&limit=25` | Autocomplete against HA's `/api/states`. Filters by domain prefix and case-insensitive substring on entity_id or friendly_name. |
+
+## Smart AC override
+
+Thin wrapper that flips `input_boolean.ac_<room>` and pins it via
+`input_datetime.ac_<room>_override_until` — matches the contract in
+[ha-house-tools's SMART_AC.md](https://github.com/geekychris/ha-house-tools/blob/main/docs/SMART_AC.md).
+
+| Endpoint | Description |
+|---|---|
+| `POST /api/smart_ac/override` | Body: `{room, state: "on"|"off", duration_minutes}`. duration=0 clears the override so the scheduler resumes control on next tick. Never touches the `smart_ac_enabled` kill switch. |
+
+## Announcements
+
+Two flavours of alert wired through the same reminder scheduler.
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/announcements` | Effective per-source config (tides, HOA, storms, quakes, battery_charged, excessive_discharge, water_low). Merges defaults on top of persisted values. |
+| `PUT /api/announcements` | Update per-source `enabled`, `warn_minutes_before[]`, `channels[]`, and any source-specific fields (SoC thresholds, kW thresholds, warn percents). |
+| `POST /api/announcements/ingest` | Force an immediate ingest pass — turns configured sources' upcoming windows into events with reminders. |
+
+State-based sources (battery / discharge / water) run every 60 s from
+the reminder scheduler tick; time-based sources (tides) are ingested
+into the events store once an hour.
 
 ## Events + reminders
 

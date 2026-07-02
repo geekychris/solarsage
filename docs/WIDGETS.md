@@ -180,6 +180,66 @@ async def fetch(self, config):
 
 No network fetch of your own; you're just repackaging existing data.
 
+## Catalog
+
+Auto-generated from each widget class's metadata by
+`tools/build_catalog.py`. Run it after adding a new widget:
+
+```
+python3 tools/build_catalog.py > /tmp/catalog.md
+```
+
+Then paste the table below.
+
+| id | name | tab | refresh | description |
+| -- | ---- | --- | ------- | ----------- |
+| `aqi` | Air quality | Safety | 1 h | Current air quality (US AQI, PM2.5, PM10, ozone, dust) plus the next-24h peak. Source: Open-Meteo. |
+| `quakes` | Earthquakes | Safety | 1 h | Recent felt earthquakes (M ≥ 2.5) within a configurable radius. Source: USGS. |
+| `storms` | Tropical storms | Safety | 1 h | Active tropical cyclones (NHC). Filters to configured basins. |
+| `uv_heat` | UV & heat stress | Safety | 1 h | Today's peak UV time + apparent-temperature danger window. Source: Open-Meteo. |
+| `fishing_window` | Fishing windows | Outdoor | 1 h | Best fishing windows based on tide movement, dawn/dusk light, sea state. |
+| `marine` | Marine forecast | Outdoor | 1 h | Sea conditions — wave height, wind, sea temperature. |
+| `sea_temp` | Sea temperature | Outdoor | 1 h | Sea surface temperature current + 7-day forecast. |
+| `sun_moon` | Sun & moon | Outdoor | 1 h | Sunrise / sunset / solar noon + moon phase. Local computation, no API. |
+| `sunset` | Sunset countdown | Outdoor | 1 h | Live-ticking minutes to sunset + civil dusk with 'golden 20' highlight. |
+| `tides` | Tide tables | Outdoor | 1 h | High/low tide predictions from worldtides.info. |
+| `weather` | Weather | Outdoor | 1 h | Current conditions + 7-day forecast. Source: Open-Meteo. |
+| `whale_season` | Whale watching | Outdoor | 1 h | Sea of Cortez whale-watching season indicator. |
+| `border` | Border wait times | Travel | 1 h | US-Mexico border crossing wait times (CBP). |
+| `costco_fuel` | Fuel prices | Travel | 1 h | Real CA retail avg from EIA + live per-station Pemex prices from CRE gov feed + manual Costco. |
+| `currency` | MXN/USD | Travel | 1 h | Daily USD/MXN from Frankfurter (ECB), 14-day series. |
+| `drive_time` | Drive times | Travel | 1 h | Driving distance / time between points (OSRM). |
+| `holidays` | Mexican holidays | Travel | 1 h | Federal public holidays. |
+| `return_countdown` | Days until return | Travel | 1 h | Countdown to your next drive back north. |
+| `trip_planner` | Trip planner | Travel | 1 h | Daily 'go-score' for a US run combining drive time + border wait + weather. |
+| `acpv_overlay` | AC vs PV overlay | Solar | 15 m | Today's PV + smart_ac consumption on one axis. EG4 history + HA. |
+| `climate_chart` | Room climate history | Solar | 20 m | Temp + humidity 24 h / 7 d chart. Shares sensor list with `solar_vitals`. |
+| `consumption_yoy` | Consumption YoY | Solar | 1 h | Today's load vs. same-day-last-year from EG4 history. |
+| `precool` | Pre-cool advisor | Solar | 1 h | Suggests pre-cool window based on apparent-temperature peak. |
+| `property_mode` | Property mode | Solar | 1 h | Occupied / Vacant / Arriving — other widgets can read this to relax alerts. |
+| `solar_excess` | Excess-energy planner | Solar | 1 h | Today's solar surplus + suggested loads for the midday window. |
+| `solar_vitals` | Solar vitals | Solar | 1 m | SoC, PV per-string, live load, projected time-to-full/empty, per-AC chip row, temp/humidity per room, per-AC override UI. |
+| `when_to_run` | When to run | Solar | 1 h | Best contiguous window today/tomorrow for each configurable high-load appliance. |
+| `baja_news` | Baja news | Community | 1 h | Regional headlines. |
+| `baja_races` | Baja races | Community | 1 h | SCORE International off-road schedule. |
+| `hoa` | El Dorado Ranch activities | Community | 1 h | Weekly PDF-scraped HOA activities. |
+| `hoa_newsletter` | HOA newsletter | Community | 1 h | Latest HOA newsletter PDF. |
+| `news` | News | Community | 1 h | Configurable RSS/Atom feeds. |
+| `property_tax` | Property tax (predial) | Community | 1 h | San Felipe predial countdown. |
+| `reservations` | Reservations | Community | 1 h | Upcoming bookings from iCal URLs. |
+| `spanish` | Spanish practice | Community | 1 h | Phrase of the day + practice speak button. |
+| `border_log` | Border crossing log | Lists | 1 h | Log of border crossings. |
+| `contacts` | Contacts | Lists | 1 h | Address book. |
+| `quicklinks` | Quick links | Lists | 1 h | Bookmarks. Ships with an "Apps" group for smart_ac and Home Assistant. |
+| `shopping_list` | Shopping list | Lists | 1 h | Items to buy in the US on next border run. |
+| `todo` | Todo | Lists | 1 h | General-purpose task list. |
+| `water_tank` | Water tank | Local | 5 m | Cistern % full, gallons, days-remaining projection, tiered low-level announcements. HA depth sensor. |
+
+**Recent additions** (July 2026): `sunset`, `water_tank`, `when_to_run`,
+`acpv_overlay`, `climate_chart`. **Recent changes to existing widgets**:
+`solar_vitals` grew a per-AC override UI, per-room temp/humidity chip
+row, and pie-chart hover; `costco_fuel` picked up real live Pemex data.
+
 ## Widget health
 
 Every widget's `fetch` result is stored in the `widget_state` table with
