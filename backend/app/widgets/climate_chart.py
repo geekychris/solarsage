@@ -102,7 +102,9 @@ class ClimateChartWidget(Widget):
     )
     refresh_seconds = 20 * 60
     default_tab = "Solar"
-    default_position = 60
+    # Sit right after solar_vitals (position 3) so the chart is next
+    # to the live temperature/humidity readout.
+    default_position = 5
 
     data_schema = {
         "type": "object",
