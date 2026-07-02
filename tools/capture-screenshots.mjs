@@ -230,18 +230,20 @@ const SHOTS = [
 ];
 
 async function clickSubTab(page, name) {
-  // Subtabs render as ``<div class="local-subtab">Solar<span>10</span></div>`` —
-  // multi-node text confuses Playwright's hasText matcher. Do the
-  // find + click inside the page so we're comparing textContent
-  // directly to the tab name.
-  const clicked = await page.evaluate((n) => {
-    const els = Array.from(document.querySelectorAll(".local-subtab"));
-    const hit = els.find((e) => e.textContent.trim().replace(/\s+\d+$/, "") === n);
-    if (hit) { hit.click(); return true; }
-    return false;
-  }, name);
-  if (!clicked) console.warn(`subtab '${name}' not found`);
-  await page.waitForTimeout(400);
+  // Wait for the subtabs to render, then use Playwright's filter().
+  try {
+    await page.waitForSelector(".local-subtab", { timeout: 5000 });
+  } catch {
+    console.warn(`no subtabs visible when trying to click '${name}'`);
+    return;
+  }
+  const btn = page.locator(".local-subtab").filter({ hasText: name }).first();
+  if (await btn.count() === 0) {
+    console.warn(`subtab '${name}' not found`);
+    return;
+  }
+  await btn.click({ timeout: 5000 });
+  await page.waitForTimeout(500);
 }
 
 async function openSettings(page, tabId) {
@@ -311,6 +313,16 @@ async function main() {
   const page = await context.newPage();
   await login(page);
 
+  async function ensureLocalTab() {
+    const isOnLocal = await page.locator(".local-subtab").count();
+    if (isOnLocal > 0) return;
+    const localTab = page.locator(".tabs .tab").filter({ hasText: /^Local$/ }).first();
+    if (await localTab.count() > 0) {
+      await localTab.click();
+      await page.waitForSelector(".local-subtab", { timeout: 10_000 });
+    }
+  }
+
   const manifest = [];
   for (const shot of SHOTS) {
     // For mobile-only shots we swap the viewport before capture.
@@ -318,6 +330,13 @@ async function main() {
       await page.setViewportSize(shot.viewport);
     } else {
       await page.setViewportSize(VIEWPORT);
+    }
+    // If a previous Settings modal or Rotation view left us elsewhere,
+    // return to the Local view before this shot's open() runs.
+    // Skip for the rotation and mobile shots — they intentionally
+    // navigate somewhere else.
+    if (!/rotation|mobile/i.test(shot.file)) {
+      try { await ensureLocalTab(); } catch {}
     }
     try {
       await shot.open(page);
