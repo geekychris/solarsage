@@ -40,6 +40,11 @@ class Widget:
     # widget-header size popover, which writes to the layout row.
     default_width: int = 1
     default_height: int = 1
+    # If set, the refresher skips fetch() when the cached state is
+    # younger than this many seconds. Point of this is API-credit
+    # frugality — e.g. tide predictions don't change intra-day, so a
+    # backend restart shouldn't burn another paid credit.
+    max_stale_seconds: int | None = None
     # JSON-schema-ish hint of what ``data`` looks like — informational only,
     # not validated. Helps the LLM know what fields to ask about.
     data_schema: dict[str, Any] = {}

@@ -268,7 +268,7 @@ async function login(page) {
   // Two paths: either the app already has a saved session and jumps
   // straight to the dashboard, or the login form is presented.
   await page.waitForFunction(
-    () => document.querySelector(".local-subtab") ||
+    () => document.querySelector(".tabs .tab") ||
           document.querySelector("#u"),
     { timeout: 30_000 },
   );
@@ -277,7 +277,15 @@ async function login(page) {
     await page.fill("#u", USERNAME);
     await page.fill("#p", PASSWORD);
     await page.click('button[type="submit"]');
-    await page.waitForSelector(".local-subtab", { timeout: 30_000 });
+    await page.waitForSelector(".tabs .tab", { timeout: 30_000 });
+  }
+  // Switch to the "Local" top-level tab — that's where the widget
+  // system lives (subtabs Solar / Outdoor / Safety / etc). The
+  // default landing is "Now" which shows the legacy Power Flow view.
+  const localTab = page.locator(".tabs .tab", { hasText: /^Local$/ }).first();
+  if (await localTab.count() > 0) {
+    await localTab.click();
+    await page.waitForSelector(".local-subtab", { timeout: 15_000 });
   }
 }
 

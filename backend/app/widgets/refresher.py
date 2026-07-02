@@ -73,7 +73,24 @@ async def _refresh_once(
     sheets: Any | None = None,
     subs: Any | None = None,
     mqtt: Any | None = None,
+    force: bool = False,
 ) -> None:
+    # Skip fetch if the widget declares a max_stale window and our
+    # cached state is still within it. Point is API-credit frugality —
+    # backend restarts / manual refreshes shouldn't waste calls on
+    # data that doesn't change intra-day.
+    max_stale = getattr(widget, "max_stale_seconds", None)
+    if not force and max_stale:
+        state = await store.get_state(widget.id)
+        if state and state.fetched_at and not state.error:
+            import time as _time
+            age = _time.time() - float(state.fetched_at)
+            if age < max_stale:
+                log.debug(
+                    "widget %s: cached data is %.0fs old (max_stale=%s), skipping fetch",
+                    widget.id, age, max_stale,
+                )
+                return
     try:
         config = await store.get_config(widget.id)
     except Exception as exc:  # noqa: BLE001
@@ -148,5 +165,6 @@ async def refresh_now(
     mqtt: Any | None = None,
 ) -> None:
     """Force an immediate refresh — used by the POST /api/widgets/{id}/refresh
-    endpoint so a user can pull fresh data without waiting for the loop."""
-    await _refresh_once(widget, store, sheets, subs, mqtt)
+    endpoint so a user can pull fresh data without waiting for the loop.
+    Bypasses max_stale_seconds so the user can always force a live fetch."""
+    await _refresh_once(widget, store, sheets, subs, mqtt, force=True)
