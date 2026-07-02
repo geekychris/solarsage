@@ -166,9 +166,13 @@ async def _fire_due_reminders(store: EventStore) -> None:
 
 
 def _format_reminder_text(title: str, starts_at: datetime, minutes_before: int) -> str:
-    hour = starts_at.strftime("%-I").lstrip("0") or "12"
-    minute = starts_at.minute
-    am_pm = starts_at.strftime("%p").lower()
+    # ``starts_at`` is stored UTC-aware — convert to the runtime's local
+    # timezone before formatting so the "starts at X" in the spoken /
+    # Telegram message matches what the listener sees on their clock.
+    local = starts_at.astimezone() if starts_at.tzinfo else starts_at
+    hour = local.strftime("%-I").lstrip("0") or "12"
+    minute = local.minute
+    am_pm = local.strftime("%p").lower()
     time_str = f"{hour}{':' + f'{minute:02d}' if minute else ''} {am_pm}"
     if minutes_before <= 75:
         return f"Reminder: {title} starts at {time_str}, in about {minutes_before} minutes."
