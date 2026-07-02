@@ -233,21 +233,20 @@ async function settle(page, ms) {
 }
 
 async function login(page) {
-  await page.goto(URL);
+  await page.goto(URL, { waitUntil: "domcontentloaded" });
   // Two paths: either the app already has a saved session and jumps
-  // straight to the dashboard, or the login form is presented. Race
-  // the two selectors.
-  const result = await Promise.race([
-    page.waitForSelector(".local-subtab", { timeout: 15_000 }).then(() => "dash"),
-    page.waitForSelector("#u",           { timeout: 15_000 }).then(() => "login"),
-  ]).catch(() => null);
-  if (result === "login") {
+  // straight to the dashboard, or the login form is presented.
+  await page.waitForFunction(
+    () => document.querySelector(".local-subtab") ||
+          document.querySelector("#u"),
+    { timeout: 30_000 },
+  );
+  const hasLogin = await page.$("#u");
+  if (hasLogin) {
     await page.fill("#u", USERNAME);
     await page.fill("#p", PASSWORD);
     await page.click('button[type="submit"]');
     await page.waitForSelector(".local-subtab", { timeout: 30_000 });
-  } else if (!result) {
-    throw new Error("neither dashboard nor login appeared within 15s");
   }
 }
 
