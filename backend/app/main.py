@@ -1869,6 +1869,8 @@ async def _widget_payload(w, *, include_data: bool = True) -> dict[str, Any]:
     layout = {
         "tab": config.get("_tab") or w.default_tab,
         "position": int(config.get("_position", w.default_position)),
+        "width":  max(1, min(3, int(config.get("_width",  1)))),
+        "height": max(1, min(3, int(config.get("_height", 1)))),
     }
     body: dict[str, Any] = {
         "meta": w.meta(),
@@ -1892,15 +1894,22 @@ async def put_widget_layout(
     body: dict[str, Any],
     _: Session | None = Depends(require_read),
 ):
-    """Move a widget between tabs / change its position within a tab.
-    Body: ``{"tab": "Safety", "position": 10}``. Either field is
-    optional; whichever is omitted keeps its current value."""
+    """Move a widget between tabs, change its position within a tab,
+    or adjust its column/row span. Body: ``{"tab": "Safety",
+    "position": 10, "width": 2, "height": 1}``. Any field is
+    optional; omitted fields keep their current value.
+
+    ``width`` and ``height`` are grid-cell spans (1–3). Default 1×1."""
     w = _require_widget(widget_id)
     config = await widget_store.get_config(w.id) or dict(w.default_config)
     if "tab" in body and body["tab"]:
         config["_tab"] = str(body["tab"])
     if "position" in body and body["position"] is not None:
         config["_position"] = int(body["position"])
+    if "width" in body and body["width"] is not None:
+        config["_width"] = max(1, min(3, int(body["width"])))
+    if "height" in body and body["height"] is not None:
+        config["_height"] = max(1, min(3, int(body["height"])))
     await widget_store.put_config(w.id, config)
     return {"id": w.id, **(await _widget_payload(w, include_data=False))}
 

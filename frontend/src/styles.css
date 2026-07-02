@@ -552,8 +552,32 @@ select, input {
 /* Local tab — widgets (tides / border / HOA) */
 .local-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  /* Fixed 3-col grid so span-2 / span-3 make sense; collapses to
+     fewer columns on narrow viewports via the media queries below. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(180px, auto);
+  grid-auto-flow: dense;   /* backfill gaps so shorter widgets slot in */
   gap: 16px;
+}
+@media (max-width: 1100px) {
+  .local-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .local-grid {
+    grid-template-columns: 1fr;
+  }
+  /* On narrow viewports collapse all spans so nothing overflows. */
+  .local-grid > * { grid-column: span 1 !important; grid-row: span 1 !important; }
+}
+.local-grid > * {
+  min-width: 0;    /* let grid cells actually shrink */
+  min-height: 0;
+  display: flex;   /* stretch wrapped .widget-card to full cell height */
+}
+.local-grid > .widget-card,
+.local-grid > * > .widget-card {
+  flex: 1;
+  width: 100%;
 }
 .widget-card {
   display: flex;
@@ -573,6 +597,19 @@ select, input {
   white-space: nowrap;
 }
 .widget-body { flex: 1; }
+.widget-move-size {
+  min-width: 90px;
+  padding: 4px;
+}
+.widget-move-size button {
+  min-width: 26px;
+  margin: 1px;
+}
+.widget-move-size button.active {
+  background: rgba(108,209,255,0.2);
+  color: #6cd1ff;
+  font-weight: 700;
+}
 .error-inline { color: #f08080; font-size: 12px; }
 
 .tide-stations { display: flex; flex-direction: column; gap: 16px; }

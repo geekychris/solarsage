@@ -105,12 +105,15 @@ function FetchedAt({ ts, error }) {
 
 function MoveControls({ widget, allTabs, onMove }) {
   const [open, setOpen] = useState(false);
+  const [sizeOpen, setSizeOpen] = useState(false);
+  const width = widget.layout?.width || 1;
+  const height = widget.layout?.height || 1;
   return (
     <div className="widget-move">
       <button title="Move up" onClick={() => onMove(widget.id, { delta: -1 })}>↑</button>
       <button title="Move down" onClick={() => onMove(widget.id, { delta: +1 })}>↓</button>
       <div className="widget-move-tab">
-        <button onClick={() => setOpen((o) => !o)} title="Move to tab">⇄</button>
+        <button onClick={() => { setSizeOpen(false); setOpen((o) => !o); }} title="Move to tab">⇄</button>
         {open && (
           <div className="widget-move-menu">
             {allTabs.map((t) => (
@@ -121,6 +124,32 @@ function MoveControls({ widget, allTabs, onMove }) {
               >
                 {t}
               </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="widget-move-tab">
+        <button
+          onClick={() => { setOpen(false); setSizeOpen((o) => !o); }}
+          title={`Size (${width}w × ${height}h)`}
+        >⤢</button>
+        {sizeOpen && (
+          <div className="widget-move-menu widget-move-size">
+            <div className="muted" style={{ fontSize: 10 }}>Width</div>
+            {[1, 2, 3].map((n) => (
+              <button
+                key={`w${n}`}
+                className={n === width ? "active" : ""}
+                onClick={() => { setSizeOpen(false); onMove(widget.id, { width: n }); }}
+              >{n}×</button>
+            ))}
+            <div className="muted" style={{ fontSize: 10, marginTop: 4 }}>Height</div>
+            {[1, 2, 3].map((n) => (
+              <button
+                key={`h${n}`}
+                className={n === height ? "active" : ""}
+                onClick={() => { setSizeOpen(false); onMove(widget.id, { height: n }); }}
+              >×{n}</button>
             ))}
           </div>
         )}
@@ -272,7 +301,7 @@ export default function LocalTab({ tzOffsetMinutes }) {
     }
   }, [tabsAndGroups.tabs, activeSubTab]);
 
-  const onMove = useCallback(async (widgetId, { delta, tab }) => {
+  const onMove = useCallback(async (widgetId, { delta, tab, width, height }) => {
     if (widgetId.startsWith("_")) return; // virtual card, not server-side
     const current = (widgets || []).find((w) => w.id === widgetId);
     if (!current) return;
@@ -282,6 +311,8 @@ export default function LocalTab({ tzOffsetMinutes }) {
       const pos = (current.layout?.position ?? 100) + delta * 10;
       body.position = pos;
     }
+    if (typeof width === "number") body.width = width;
+    if (typeof height === "number") body.height = height;
     try {
       await fetch(`/api/widgets/${encodeURIComponent(widgetId)}/layout`, {
         method: "PUT",
@@ -325,10 +356,16 @@ export default function LocalTab({ tzOffsetMinutes }) {
       </div>
       <div className="local-grid">
         {widgetsInTab.map((w) => {
+          const width = w.layout?.width || 1;
+          const height = w.layout?.height || 1;
+          const style = {
+            gridColumn: `span ${width}`,
+            gridRow: `span ${height}`,
+          };
           if (w.id === "_events" || w.id === "_subscriptions") {
             const Inner = w.id === "_events" ? EventsWidget : SubscriptionsWidget;
             return (
-              <div key={w.id} className="panel widget-card">
+              <div key={w.id} className="panel widget-card" style={style}>
                 <div className="widget-head">
                   <div className="widget-title">
                     <h3 style={{ margin: 0 }}>{w.meta.name}</h3>
@@ -349,14 +386,15 @@ export default function LocalTab({ tzOffsetMinutes }) {
             );
           }
           return (
-            <WidgetCard
-              key={w.id}
-              widget={w}
-              tzOffsetMinutes={tzOffsetMinutes}
-              onRefreshed={load}
-              allTabs={tabs}
-              onMove={onMove}
-            />
+            <div key={w.id} style={style}>
+              <WidgetCard
+                widget={w}
+                tzOffsetMinutes={tzOffsetMinutes}
+                onRefreshed={load}
+                allTabs={tabs}
+                onMove={onMove}
+              />
+            </div>
           );
         })}
       </div>
