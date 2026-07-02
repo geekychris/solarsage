@@ -235,11 +235,15 @@ async function clickSubTab(page, name) {
 }
 
 async function openSettings(page, tabId) {
-  // Close any open settings first
-  await page.keyboard.press("Escape").catch(() => {});
-  await settle(page, 200);
-  // Prefer the top-level Dashboard "Settings" text button — widget-
-  // level gears also have title="Settings" and can steal the click.
+  // If a modal is already open (previous shot), close it via the
+  // dedicated close button. Escape doesn't seem to be wired.
+  const closeBtn = page.locator(".settings-tab-close").first();
+  if (await closeBtn.isVisible().catch(() => false)) {
+    await closeBtn.click();
+    await settle(page, 300);
+  }
+  // Then click the top-level Dashboard "Settings" text button —
+  // widget-level gears also have title="Settings" so match text.
   await page.getByRole("button", { name: /^Settings$/ }).first().click();
   await page.waitForSelector(".modal-wide", { timeout: 5000 });
   const tabButton = page.locator(".settings-tab", { hasText: new RegExp(tabName(tabId), "i") }).first();
