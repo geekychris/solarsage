@@ -78,6 +78,129 @@ works inside.
 Annotated tour of every panel. Screenshots are live captures from a real EG4
 system running in San Felipe, Mexico.
 
+### Automated dashboard tour
+
+The images below are captured programmatically from a live SolarSage. To
+refresh them after UI changes:
+
+```bash
+export EG4_USERNAME=... EG4_PASSWORD=...
+export SOLARSAGE_URL=https://pi-sf.hitorro.com   # or your own host
+./scripts/capture-screenshots.sh
+git add docs/screenshots && git commit -m "chore: refresh screenshots"
+```
+
+The script (`tools/capture-screenshots.mjs`) uses Playwright + headless
+Chromium, logs in with the credentials above, walks every tab + settings
+modal + rotation view, and writes 17 PNGs into `docs/screenshots/`. Manifest
+lives at `docs/screenshots/manifest.json`.
+
+<p align="center">
+  <img src="docs/screenshots/01-dashboard-solar.png" alt="Solar tab" width="900" />
+</p>
+
+**Solar tab** — Solar Vitals (SoC, per-string PV, live load, per-AC override, per-room temperature/humidity), Room Climate History chart, When-to-Run recommender, Peak Load recorder, Forecast Accuracy tracker, AC vs PV overlay, Consumption YoY.
+
+<p align="center">
+  <img src="docs/screenshots/02-dashboard-outdoor.png" alt="Outdoor tab" width="900" />
+</p>
+
+**Outdoor tab** — weather + 7-day forecast, tide tables (with real Pemex prices via CRE gov feed on the Travel tab), sunset countdown with golden-20 highlight, Sky Tonight (locally-computed planet positions), Meteor Showers with announcement window.
+
+<p align="center">
+  <img src="docs/screenshots/03-dashboard-safety.png" alt="Safety tab" width="900" />
+</p>
+
+**Safety tab** — earthquakes (USGS, magnitude + radius filters), tropical storms (NHC basin filter), UV & heat stress, air quality (US AQI + PM2.5/PM10/ozone).
+
+<p align="center">
+  <img src="docs/screenshots/04-dashboard-travel.png" alt="Travel tab" width="900" />
+</p>
+
+**Travel tab** — trip planner with border wait + weather score, US-Mx border wait times, fuel prices (real EIA California avg + live per-station Pemex from CRE gov feed with reverse-geocoded addresses + manual Costco entry with staleness meter), MXN/USD, driving distance + time.
+
+<p align="center">
+  <img src="docs/screenshots/05-dashboard-community.png" alt="Community tab" width="900" />
+</p>
+
+**Community tab** — HOA activities (weekly PDF auto-scraped), Today's events with per-event reminders, RSS/Atom news, Baja races, property tax countdown, Spanish practice phrase of the day.
+
+<p align="center">
+  <img src="docs/screenshots/06-widget-solar-vitals.png" alt="Solar Vitals widget" width="720" />
+</p>
+
+**Solar Vitals** (dense, defaults to 2× width) — big-number SoC, live per-string PV production, load breakdown pie chart with hover attribution, per-appliance chips, per-AC override popover ("Turn OFF for 30m / 1h / 2h / 4h — Release to smart_ac"), per-room temperature + humidity chip row, projected time-to-full / time-to-empty with a "start conserving" cut-back warning.
+
+<p align="center">
+  <img src="docs/screenshots/07-widget-climate-chart.png" alt="Room Climate History" width="720" />
+</p>
+
+**Room Climate History** — multi-line temperature + humidity over configurable 24h / 3d / 7d windows, with a hover crosshair that lifts the matching sensor read-out. Shares the sensor list with Solar Vitals.
+
+<p align="center">
+  <img src="docs/screenshots/08-widget-water-tank.png" alt="Water Tank" width="480" />
+</p>
+
+**Water Tank** — reads a Home Assistant ultrasonic depth sensor; renders % full, gallons remaining (from configurable gallons-per-foot geometry), days-remaining projection from the 7-day trend, and tiered warning bar at 50/25/10%. Warnings fire via the announcements framework (TTS + Telegram, respecting quiet hours).
+
+<p align="center">
+  <img src="docs/screenshots/09-widget-peak-load.png" alt="Peak Load" width="720" />
+</p>
+
+**Peak Load** — rolling 30-day max simultaneous load, plus today's peak, plus a per-day bar chart. Red bars mark days that got close to the inverter limit.
+
+<p align="center">
+  <img src="docs/screenshots/10-widget-acpv-overlay.png" alt="AC vs PV overlay" width="720" />
+</p>
+
+**AC vs PV Overlay** — 24 h of PV production overlaid with smart_ac consumption (integrated per-room via HA history + calibration). Hover crosshair shows values at any minute. Diagnoses whether smart_ac tracked the sun today.
+
+<p align="center">
+  <img src="docs/screenshots/11-widget-sky-tonight.png" alt="Sky Tonight" width="480" />
+</p>
+
+**Sky Tonight** — naked-eye planets tonight (Mercury / Venus / Mars / Jupiter / Saturn) with rise, peak, set times and peak altitude; moon phase + illumination. Local VSOP-style math, no external API.
+
+<p align="center">
+  <img src="docs/screenshots/12-settings-system.png" alt="Settings — System" width="820" />
+</p>
+
+**Settings → System** — Leaflet + OpenStreetMap location picker (click or drag the marker), coordinates + timezone, system peak kW / battery kWh / inverter max charge, history retention, editable tab labels (rename or merge tabs — e.g. relabel "Solar" and "Local" both as "House"), external services (Home Assistant URL + token, TTS URL, Telegram service + target, WorldTides + EIA API keys — all revealable with an eye toggle).
+
+<p align="center">
+  <img src="docs/screenshots/13-settings-notifications.png" alt="Settings — Notifications" width="820" />
+</p>
+
+**Settings → Notifications** — Global quiet-hours envelope (per-channel muting during a nightly window). Per-source enable + channel + threshold config for tides, HOA events, storms, quakes, battery-charged, excessive-discharge, water-low, meteor showers. Per-row "Test" button fires a synthetic announcement to verify TTS + Telegram end-to-end. Recent announcements log at the bottom with a "Replay last N minutes" action.
+
+<p align="center">
+  <img src="docs/screenshots/14-settings-ha-integrations.png" alt="Settings — HA Integrations" width="820" />
+</p>
+
+**Settings → HA Integrations** — one card per widget that reads Home Assistant. Each row shows the current entity ID, a live-value read-out, and an autocomplete-backed entity picker. Save validates the new entity exists in HA before writing. The Solar Vitals card also has a bespoke Room Sensors editor for adding / renaming / removing temperature+humidity pairs.
+
+<p align="center">
+  <img src="docs/screenshots/15-settings-rotation.png" alt="Settings — Rotation" width="820" />
+</p>
+
+**Settings → Rotation** — configure the full-screen "screensaver" widget rotation with per-step dwell time. Same widget can appear multiple times to weight visibility. Launch from `?view=rotation`; Esc exits, Space pauses, ← → step.
+
+<p align="center">
+  <img src="docs/screenshots/16-rotation-mode.png" alt="Rotation mode" width="900" />
+</p>
+
+**Rotation mode** — full-screen kiosk view, auto-advancing through the configured widget sequence. Ideal for a wall-mounted Raspberry Pi displaying the house state.
+
+<p align="center">
+  <img src="docs/screenshots/17-mobile-dashboard.png" alt="Mobile view" width="360" />
+</p>
+
+**Mobile viewport** — same widgets, same data, 1-column grid on narrow screens (grid-column spans collapse under 700 px).
+
+---
+
+### Panel-by-panel walkthrough (original, pre-July 2026)
+
 ### Login
 
 <img src="docs/screenshots/login.annotated.png" alt="Login screen" width="720" />
