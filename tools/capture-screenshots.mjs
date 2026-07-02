@@ -230,10 +230,18 @@ const SHOTS = [
 ];
 
 async function clickSubTab(page, name) {
-  // Subtabs render as "Solar 10" (name + count) so match a whole-word
-  // prefix rather than exact text.
-  const sel = page.locator(".local-subtab", { hasText: new RegExp(`^${name}\\b`) }).first();
-  if (await sel.count() > 0) await sel.click();
+  // Subtabs render as ``<div class="local-subtab">Solar<span>10</span></div>`` —
+  // multi-node text confuses Playwright's hasText matcher. Do the
+  // find + click inside the page so we're comparing textContent
+  // directly to the tab name.
+  const clicked = await page.evaluate((n) => {
+    const els = Array.from(document.querySelectorAll(".local-subtab"));
+    const hit = els.find((e) => e.textContent.trim().replace(/\s+\d+$/, "") === n);
+    if (hit) { hit.click(); return true; }
+    return false;
+  }, name);
+  if (!clicked) console.warn(`subtab '${name}' not found`);
+  await page.waitForTimeout(400);
 }
 
 async function openSettings(page, tabId) {
