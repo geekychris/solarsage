@@ -11,6 +11,30 @@ const TABS = [
   { id: "ha", label: "HA Integrations" },
 ];
 
+function SecretInput({ value, onChange, placeholder, name }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="secret-input">
+      <input
+        type={show ? "text" : "password"}
+        autoComplete="off"
+        name={name}
+        value={value ?? ""}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button
+        type="button"
+        className="secret-toggle"
+        title={show ? "Hide" : "Show"}
+        onClick={() => setShow((v) => !v)}
+      >
+        {show ? "🙈" : "👁"}
+      </button>
+    </div>
+  );
+}
+
 export default function Settings({ open, onClose, onSaved }) {
   const [s, setS] = useState(null);
   const [err, setErr] = useState("");
@@ -156,12 +180,11 @@ export default function Settings({ open, onClose, onSaved }) {
               </div>
               <div className="field" style={{ gridColumn: "span 2" }}>
                 <label>Home Assistant token</label>
-                <input
-                  type="password"
-                  autoComplete="off"
-                  value={s.ha_token ?? ""}
+                <SecretInput
+                  name="ha_token"
+                  value={s.ha_token}
                   placeholder="long-lived access token"
-                  onChange={(e) => up("ha_token", e.target.value)}
+                  onChange={(v) => up("ha_token", v)}
                 />
                 <span className="muted" style={{ fontSize: 11 }}>
                   Profile → Security → Long-Lived Access Tokens in HA.
@@ -193,19 +216,19 @@ export default function Settings({ open, onClose, onSaved }) {
               </div>
               <div className="field">
                 <label>WorldTides API key</label>
-                <input
-                  value={s.worldtides_api_key ?? ""}
-                  type="password" autoComplete="off"
-                  onChange={(e) => up("worldtides_api_key", e.target.value)}
+                <SecretInput
+                  name="worldtides_api_key"
+                  value={s.worldtides_api_key}
+                  onChange={(v) => up("worldtides_api_key", v)}
                 />
               </div>
               <div className="field">
                 <label>EIA API key</label>
-                <input
-                  value={s.eia_api_key ?? ""}
-                  type="password" autoComplete="off"
+                <SecretInput
+                  name="eia_api_key"
+                  value={s.eia_api_key}
                   placeholder="DEMO_KEY (rate-limited fallback)"
-                  onChange={(e) => up("eia_api_key", e.target.value)}
+                  onChange={(v) => up("eia_api_key", v)}
                 />
               </div>
             </div>

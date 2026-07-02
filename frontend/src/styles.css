@@ -1732,6 +1732,22 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
 .ha-readonly summary { cursor: pointer; padding: 4px 0; }
 .ha-readonly code { font-size: 11px; }
 
+/* Secret input with eye toggle */
+.secret-input { position: relative; display: flex; }
+.secret-input input {
+  flex: 1;
+  padding-right: 32px;
+  font-family: ui-monospace, monospace;
+}
+.secret-toggle {
+  position: absolute; right: 4px; top: 50%;
+  transform: translateY(-50%);
+  background: none; border: none; padding: 2px 6px;
+  cursor: pointer; font-size: 14px; line-height: 1;
+  color: inherit; opacity: 0.7;
+}
+.secret-toggle:hover { opacity: 1; }
+
 /* Water tank */
 .water-tank-top {
   display: flex; gap: 16px; align-items: center; margin-bottom: 8px;
