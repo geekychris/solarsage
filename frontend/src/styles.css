@@ -1793,6 +1793,13 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
   background: none; border: 1px solid var(--border, #232a35);
   border-radius: 3px; color: #ef6f6c;
 }
+.ha-subsection {
+  margin-top: 14px; padding-top: 10px;
+  border-top: 1px solid var(--border, #232a35);
+}
+.ha-subsection-title {
+  margin: 0 0 6px 0; font-size: 13px; font-weight: 700;
+}
 
 /* Water tank */
 .water-tank-top {

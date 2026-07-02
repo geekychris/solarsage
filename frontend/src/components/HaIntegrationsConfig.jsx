@@ -80,9 +80,17 @@ function RoomSensorEditor({ widgetId, onSaved }) {
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    api.getWidgetConfig(widgetId).then((r) =>
-      setConfig(r.config || {})
-    ).catch((ex) => setErr(ex.message));
+    api.getWidgetConfig(widgetId).then((r) => {
+      // If the persisted config predates the room_sensors field, prefill
+      // from the widget's default_config so the user sees the seeded
+      // sensors and can rename them.
+      const cfg = r.config || {};
+      const defaults = r.default_config || {};
+      if (!Array.isArray(cfg.room_sensors)) {
+        cfg.room_sensors = defaults.room_sensors || [];
+      }
+      setConfig(cfg);
+    }).catch((ex) => setErr(ex.message));
   }, [widgetId]);
 
   if (!config) return <div className="muted">Loading room sensors…</div>;
@@ -269,7 +277,8 @@ function WidgetCard({ card, onSaved }) {
         </div>
       )}
       {card.widget_id === "solar_vitals" && (
-        <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+        <div className="ha-subsection">
+          <h4 className="ha-subsection-title">Room sensors</h4>
           <RoomSensorEditor widgetId="solar_vitals" onSaved={onSaved} />
         </div>
       )}
