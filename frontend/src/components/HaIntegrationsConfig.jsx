@@ -73,6 +73,111 @@ function EntityPicker({ value, domain, onPick }) {
   );
 }
 
+function RoomSensorEditor({ widgetId, onSaved }) {
+  const [config, setConfig] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    api.getWidgetConfig(widgetId).then((r) =>
+      setConfig(r.config || {})
+    ).catch((ex) => setErr(ex.message));
+  }, [widgetId]);
+
+  if (!config) return <div className="muted">Loading room sensors…</div>;
+  const sensors = config.room_sensors || [];
+
+  function updateSensor(i, patch) {
+    const next = sensors.map((s, j) => j === i ? { ...s, ...patch } : s);
+    setConfig({ ...config, room_sensors: next });
+  }
+  function addSensor() {
+    setConfig({
+      ...config,
+      room_sensors: [
+        ...sensors,
+        { name: "", temp_entity: "", humidity_entity: "" },
+      ],
+    });
+  }
+  function removeSensor(i) {
+    setConfig({
+      ...config,
+      room_sensors: sensors.filter((_, j) => j !== i),
+    });
+  }
+
+  async function save() {
+    setBusy(true); setErr(""); setMsg("");
+    try {
+      await api.putWidgetConfig(widgetId, config);
+      setMsg("Saved.");
+      if (onSaved) await onSaved();
+    } catch (ex) {
+      setErr(ex.message || "save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="room-sensors">
+      <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
+        Room sensors — any number, any name, temp and/or humidity per row.
+      </div>
+      {sensors.length === 0 && (
+        <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+          None yet — click <strong>Add sensor</strong>.
+        </div>
+      )}
+      {sensors.map((s, i) => (
+        <div key={i} className="room-sensor-row">
+          <input
+            className="room-sensor-name"
+            placeholder="Name (e.g. Living)"
+            value={s.name || ""}
+            onChange={(e) => updateSensor(i, { name: e.target.value })}
+          />
+          <div className="room-sensor-picker">
+            <div className="muted" style={{ fontSize: 10 }}>Temperature</div>
+            <EntityPicker
+              value={s.temp_entity || ""}
+              domain="sensor"
+              onPick={(v) => updateSensor(i, { temp_entity: v })}
+            />
+          </div>
+          <div className="room-sensor-picker">
+            <div className="muted" style={{ fontSize: 10 }}>Humidity</div>
+            <EntityPicker
+              value={s.humidity_entity || ""}
+              domain="sensor"
+              onPick={(v) => updateSensor(i, { humidity_entity: v })}
+            />
+          </div>
+          <button
+            type="button"
+            className="room-sensor-remove"
+            onClick={() => removeSensor(i)}
+            title="Remove sensor"
+          >✕</button>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <button type="button" onClick={addSensor}>+ Add sensor</button>
+        <div style={{ flex: 1 }} />
+        {err && <div className="error-inline">{err}</div>}
+        {msg && <span className="muted" style={{ color: "var(--ok)" }}>{msg}</span>}
+        <button
+          type="button" className="primary"
+          disabled={busy}
+          onClick={save}
+        >{busy ? "Saving…" : "Save room sensors"}</button>
+      </div>
+    </div>
+  );
+}
+
 function WidgetCard({ card, onSaved }) {
   const [drafts, setDrafts] = useState({});
   const [saving, setSaving] = useState(false);
@@ -161,6 +266,11 @@ function WidgetCard({ card, onSaved }) {
           <button type="button" className="primary" disabled={!dirty || saving} onClick={save}>
             {saving ? "Saving…" : "Save"}
           </button>
+        </div>
+      )}
+      {card.widget_id === "solar_vitals" && (
+        <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+          <RoomSensorEditor widgetId="solar_vitals" onSaved={onSaved} />
         </div>
       )}
     </div>

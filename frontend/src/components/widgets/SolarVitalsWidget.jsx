@@ -325,10 +325,10 @@ function ApplianceGrid({ data, onChanged }) {
   }, [onChanged]);
 
   return (
-    <div>
-      <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
-        What's on right now? Tap to toggle manual. HA-linked entries
-        auto-update from Home Assistant.
+    <div className="sv-appliance-panel">
+      <div className="muted sv-appliances-hint"
+           title="Tap to toggle manual. HA-linked entries auto-update from Home Assistant.">
+        What's on now
       </div>
       <div className="sv-appliances">
         {appliances.map((a) => {
@@ -557,16 +557,21 @@ export default function SolarVitalsWidget({ data, onChanged }) {
         </div>
       </div>
 
-      {Array.isArray(l.temperatures) && l.temperatures.length > 0 && (
+      {Array.isArray(l.room_sensors) && l.room_sensors.length > 0 && (
         <div className="sv-temps">
-          {l.temperatures.map((t) => (
-            <div key={t.entity_id} className="sv-temp">
-              <div className="sv-temp-label">{t.label}</div>
+          {l.room_sensors.map((r, i) => (
+            <div key={i} className="sv-temp">
+              <div className="sv-temp-label">{r.name || `Sensor ${i + 1}`}</div>
               <div className="sv-temp-value">
-                {t.value != null
-                  ? `${t.value.toFixed(1)}${t.unit || "°"}`
+                {r.temp_value != null
+                  ? `${r.temp_value.toFixed(1)}${r.temp_unit || "°"}`
                   : "—"}
               </div>
+              {r.humidity_value != null && (
+                <div className="sv-temp-hum">
+                  💧 {r.humidity_value.toFixed(0)}{r.humidity_unit || "%"}
+                </div>
+              )}
             </div>
           ))}
         </div>

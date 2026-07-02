@@ -1608,13 +1608,16 @@ select, input {
 .sv2-string strong { color: #ffd166; font-variant-numeric: tabular-nums; }
 
 .sv2-pie-row {
-  display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr);
-  gap: 12px; align-items: start;
+  display: flex; flex-wrap: wrap;
+  gap: 12px; align-items: flex-start;
   padding: 8px; border-radius: 6px;
   background: rgba(255,255,255,0.03);
-  overflow: hidden; /* belt-and-braces against child overflow */
 }
-.sv2-pie-row > * { min-width: 0; }
+.sv2-pie-row > .sv-pie-wrap { flex: 0 0 auto; }
+.sv2-pie-row > .sv-appliance-panel {
+  flex: 1 1 200px;
+  min-width: 0;
+}
 .sv-pie-wrap { display: flex; gap: 12px; align-items: center; }
 .sv-pie-legend { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
 .sv-pie-leg-row {
@@ -1634,10 +1637,12 @@ select, input {
 .sv-pie-slice.dim { opacity: 0.35; }
 .sv-pie-slice.hover { filter: brightness(1.25); }
 
+.sv-appliances-hint { font-size: 11px; margin-bottom: 4px; }
 .sv-appliances {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 4px;
   min-width: 0;
+  width: 100%;
 }
 .sv-appliance { min-width: 0; }
 .sv-app-toggle {
@@ -1657,6 +1662,7 @@ select, input {
 }
 .sv-temp-label { font-size: 10px; opacity: 0.75; }
 .sv-temp-value { font-size: 18px; font-weight: 700; margin-top: 2px; }
+.sv-temp-hum { font-size: 11px; opacity: 0.8; margin-top: 1px; }
 .sv-smart-ac { margin-top: 10px; }
 .sv-smart-ac-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
@@ -1768,6 +1774,25 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
   color: inherit; opacity: 0.7;
 }
 .secret-toggle:hover { opacity: 1; }
+
+/* Room-sensors editor (HA Integrations tab) */
+.room-sensor-row {
+  display: grid; grid-template-columns: 120px 1fr 1fr auto;
+  gap: 8px; align-items: end;
+  padding: 6px 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.room-sensor-name {
+  padding: 4px 6px; font-size: 12px;
+  background: rgba(255,255,255,0.05); color: inherit;
+  border: 1px solid var(--border, #232a35); border-radius: 3px;
+}
+.room-sensor-picker { min-width: 0; }
+.room-sensor-remove {
+  padding: 2px 8px; font-size: 14px; cursor: pointer;
+  background: none; border: 1px solid var(--border, #232a35);
+  border-radius: 3px; color: #ef6f6c;
+}
 
 /* Water tank */
 .water-tank-top {

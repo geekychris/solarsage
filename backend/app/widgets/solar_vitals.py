@@ -296,17 +296,6 @@ class SolarVitalsWidget(Widget):
          "label": "smart_ac status sensor",
          "domain": "sensor", "required": False,
          "default": "sensor.smart_ac_status"},
-        # Three temperature sensors surfaced in the widget header. Any
-        # or all may be blank — the UI renders only the ones set.
-        {"key": "temp_living_entity",
-         "label": "Living room temperature",
-         "domain": "sensor", "required": False},
-        {"key": "temp_master_entity",
-         "label": "Master bedroom temperature",
-         "domain": "sensor", "required": False},
-        {"key": "temp_outdoor_entity",
-         "label": "Outdoor temperature",
-         "domain": "sensor", "required": False},
     ]
 
     def ha_entities_for(self, config):
@@ -323,6 +312,26 @@ class SolarVitalsWidget(Widget):
                 "entity_id": f"input_boolean.ac_{room}",
                 "read_only": True,
             })
+        # Per-room temp/humidity pairs from the room_sensors list.
+        # These are read-only here since the same tab has a dedicated
+        # editor for adding/removing/naming them.
+        for i, rs in enumerate(config.get("room_sensors") or []):
+            name = rs.get("name") or f"Sensor {i+1}"
+            for kind_key, kind_label in (
+                ("temp_entity", "temp"),
+                ("humidity_entity", "humidity"),
+            ):
+                eid = rs.get(kind_key) or ""
+                if not eid:
+                    continue
+                entries.append({
+                    "key": f"room_sensor:{i}:{kind_key}",
+                    "label": f"{name} — {kind_label}",
+                    "domain": "sensor",
+                    "required": False,
+                    "entity_id": eid,
+                    "read_only": True,
+                })
         # And per-appliance HA entity ids from the appliances list
         for a in config.get("appliances") or []:
             if a.get("ha_entity_id"):
@@ -343,6 +352,22 @@ class SolarVitalsWidget(Widget):
             "cut_back_soc": {"type": "number"},
             "battery_nominal_voltage": {"type": "number"},
             "appliances": {"type": "array"},
+            "smart_ac_enabled": {"type": "boolean"},
+            "smart_ac_rooms": {"type": "array", "items": {"type": "string"}},
+            "scale_smart_ac_to_load": {"type": "boolean"},
+            "smart_ac_calibration_entity": {"type": "string"},
+            "smart_ac_status_entity": {"type": "string"},
+            "room_sensors": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name":            {"type": "string"},
+                        "temp_entity":     {"type": "string"},
+                        "humidity_entity": {"type": "string"},
+                    },
+                },
+            },
         },
     }
     default_config = {
@@ -360,6 +385,19 @@ class SolarVitalsWidget(Widget):
         # 6 kW of ACs when the inverter only reports 3 kW of load
         # (compressors cycle off between duty periods).
         "scale_smart_ac_to_load": True,
+        # Rooms with temperature and/or humidity sensors. Add / rename
+        # / remove via Settings → HA Integrations → Solar vitals →
+        # "Room sensors" editor. Defaults below match the three
+        # unlabeled temp_humidity_* sensors currently in HA — rename
+        # them once you know which is which.
+        "room_sensors": [
+            {"name": "Sensor 1", "temp_entity": "sensor.temp_humidity_temperature",
+             "humidity_entity": "sensor.temp_humidity_humidity"},
+            {"name": "Sensor 2", "temp_entity": "sensor.temp_humidity_temperature_2",
+             "humidity_entity": "sensor.temp_humidity_humidity_2"},
+            {"name": "Sensor 3", "temp_entity": "sensor.temp_humidity_temperature_3",
+             "humidity_entity": "sensor.temp_humidity_humidity_3"},
+        ],
         # Each appliance may optionally link to a Home Assistant entity
         # (any domain — switch, sensor, binary_sensor, climate, etc.).
         # When ha_entity_id is set, the widget reads HA state on every
@@ -524,34 +562,42 @@ class SolarVitalsWidget(Widget):
                     smart_ac_rooms = await _fetch_smart_ac(
                         http, ha_url, ha_token, rooms,
                     )
-                # Optional room temperature sensors — any/all may be
-                # blank, in which case that slot is skipped.
-                for label, key in (
-                    ("Living",  "temp_living_entity"),
-                    ("Master",  "temp_master_entity"),
-                    ("Outdoor", "temp_outdoor_entity"),
-                ):
-                    eid = config.get(key) or ""
-                    if not eid:
-                        continue
+                # Arbitrary user-configured room sensors — each entry
+                # can carry a temp entity, a humidity entity, or both.
+                async def _read_num(eid: str) -> tuple[float | None, str]:
                     entity = await _ha_entity(http, ha_url, ha_token, eid)
                     if not entity:
-                        continue
+                        return None, ""
                     state = entity.get("state")
                     unit = (entity.get("attributes") or {}).get(
-                        "unit_of_measurement", ""
-                    )
+                        "unit_of_measurement", "")
                     try:
                         value = float(state) if state not in (
                             None, "", "unavailable", "unknown"
                         ) else None
                     except (TypeError, ValueError):
                         value = None
+                    return value, unit
+                for rs in config.get("room_sensors") or []:
+                    name = rs.get("name") or ""
+                    temp_eid = rs.get("temp_entity") or ""
+                    hum_eid = rs.get("humidity_entity") or ""
+                    if not (temp_eid or hum_eid):
+                        continue
+                    t_val, t_unit = (None, "")
+                    h_val, h_unit = (None, "")
+                    if temp_eid:
+                        t_val, t_unit = await _read_num(temp_eid)
+                    if hum_eid:
+                        h_val, h_unit = await _read_num(hum_eid)
                     temperatures.append({
-                        "label": label,
-                        "entity_id": eid,
-                        "value": value,
-                        "unit": unit,
+                        "name": name,
+                        "temp_entity_id": temp_eid or None,
+                        "temp_value": t_val,
+                        "temp_unit": t_unit,
+                        "humidity_entity_id": hum_eid or None,
+                        "humidity_value": h_val,
+                        "humidity_unit": h_unit or ("%" if h_val is not None else ""),
                     })
 
         on_list = []
@@ -677,6 +723,7 @@ class SolarVitalsWidget(Widget):
                 # ACs even when only some are running).
                 "smart_ac_rooms": smart_ac_rooms,
                 "temperatures": temperatures,
+                "room_sensors": temperatures,
             },
             "battery_flow": {
                 "charge_kw":    round(charge_kw, 2),
