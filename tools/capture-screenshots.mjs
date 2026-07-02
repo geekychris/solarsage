@@ -230,7 +230,9 @@ const SHOTS = [
 ];
 
 async function clickSubTab(page, name) {
-  const sel = page.locator(".local-subtab", { hasText: new RegExp(`^${name}$`) }).first();
+  // Subtabs render as "Solar 10" (name + count) so match a whole-word
+  // prefix rather than exact text.
+  const sel = page.locator(".local-subtab", { hasText: new RegExp(`^${name}\\b`) }).first();
   if (await sel.count() > 0) await sel.click();
 }
 
