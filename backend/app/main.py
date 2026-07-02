@@ -287,7 +287,7 @@ async def lifespan(app: FastAPI):
     log.info("alerts watcher started")
     if sheets is not None:
         # Materialize any Sheets-backed widget tabs that don't exist yet.
-        for _w in widgetwidget_registry.all():
+        for _w in widget_registry.all():
             if _w.sheets_tab and _w.sheets_field_order:
                 try:
                     await sheets.ensure_tab(_w.sheets_tab, _w.sheets_field_order)
@@ -303,7 +303,7 @@ async def lifespan(app: FastAPI):
     )
     log.info(
         "widget refreshers started (%d widgets, subs=on, mqtt=%s)",
-        len(list(widgetwidget_registry.all())), "on" if mqtt else "off",
+        len(list(widget_registry.all())), "on" if mqtt else "off",
     )
     events_task = asyncio.create_task(
         run_reminder_scheduler(event_store, widget_store)
@@ -1840,7 +1840,7 @@ async def list_widgets(_: Session | None = Depends(require_read)):
     each widget's ``data`` field directly.
     """
     out = []
-    for w in widgetwidget_registry.all():
+    for w in widget_registry.all():
         out.append({"id": w.id, **(await _widget_payload(w))})
     return {"widgets": out}
 
