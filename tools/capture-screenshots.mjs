@@ -83,7 +83,9 @@ const SHOTS = [
       await settle(page, 500);
     },
     async region(page) {
-      return page.locator(".sv2").first().boundingBox();
+      const el = page.locator(".sv2").first();
+      try { await el.waitFor({ state: "attached", timeout: 5000 }); } catch { return null; }
+      return el.boundingBox();
     },
   },
   {
@@ -94,7 +96,9 @@ const SHOTS = [
       await settle(page, 2000);
     },
     async region(page) {
-      return page.locator(".climate-chart").first().boundingBox();
+      const el = page.locator(".climate-chart").first();
+      try { await el.waitFor({ state: "attached", timeout: 5000 }); } catch { return null; }
+      return el.boundingBox();
     },
   },
   {
@@ -107,7 +111,9 @@ const SHOTS = [
       await settle(page, 1500);
     },
     async region(page) {
-      return page.locator(".water-tank").first().boundingBox();
+      const el = page.locator(".water-tank").first();
+      try { await el.waitFor({ state: "attached", timeout: 5000 }); } catch { return null; }
+      return el.boundingBox();
     },
   },
   {
@@ -118,7 +124,9 @@ const SHOTS = [
       await settle(page, 2000);
     },
     async region(page) {
-      return page.locator(".peak-load").first().boundingBox();
+      const el = page.locator(".peak-load").first();
+      try { await el.waitFor({ state: "attached", timeout: 5000 }); } catch { return null; }
+      return el.boundingBox();
     },
   },
   {
@@ -129,7 +137,9 @@ const SHOTS = [
       await settle(page, 2000);
     },
     async region(page) {
-      return page.locator(".acpv-overlay").first().boundingBox();
+      const el = page.locator(".acpv-overlay").first();
+      try { await el.waitFor({ state: "attached", timeout: 5000 }); } catch { return null; }
+      return el.boundingBox();
     },
   },
   {
@@ -140,7 +150,9 @@ const SHOTS = [
       await settle(page, 2000);
     },
     async region(page) {
-      return page.locator(".sky-tonight").first().boundingBox();
+      const el = page.locator(".sky-tonight").first();
+      try { await el.waitFor({ state: "attached", timeout: 5000 }); } catch { return null; }
+      return el.boundingBox();
     },
   },
   {
@@ -150,7 +162,11 @@ const SHOTS = [
       await openSettings(page, "system");
       await settle(page, 2500);
     },
-    async region(page) { return page.locator(".modal-wide").first().boundingBox(); },
+    async region(page) {
+      const el = page.locator(".modal-wide").first();
+      try { await el.waitFor({ state: "attached", timeout: 5000 }); } catch { return null; }
+      return el.boundingBox();
+    },
   },
   {
     file: "13-settings-notifications.png",
@@ -159,7 +175,11 @@ const SHOTS = [
       await openSettings(page, "notifications");
       await settle(page, 1500);
     },
-    async region(page) { return page.locator(".modal-wide").first().boundingBox(); },
+    async region(page) {
+      const el = page.locator(".modal-wide").first();
+      try { await el.waitFor({ state: "attached", timeout: 5000 }); } catch { return null; }
+      return el.boundingBox();
+    },
   },
   {
     file: "14-settings-ha-integrations.png",
@@ -168,7 +188,11 @@ const SHOTS = [
       await openSettings(page, "ha");
       await settle(page, 2500);
     },
-    async region(page) { return page.locator(".modal-wide").first().boundingBox(); },
+    async region(page) {
+      const el = page.locator(".modal-wide").first();
+      try { await el.waitFor({ state: "attached", timeout: 5000 }); } catch { return null; }
+      return el.boundingBox();
+    },
   },
   {
     file: "15-settings-rotation.png",
@@ -177,7 +201,11 @@ const SHOTS = [
       await openSettings(page, "rotation");
       await settle(page, 1500);
     },
-    async region(page) { return page.locator(".modal-wide").first().boundingBox(); },
+    async region(page) {
+      const el = page.locator(".modal-wide").first();
+      try { await el.waitFor({ state: "attached", timeout: 5000 }); } catch { return null; }
+      return el.boundingBox();
+    },
   },
   {
     file: "16-rotation-mode.png",
