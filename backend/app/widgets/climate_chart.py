@@ -19,6 +19,7 @@ from typing import Any
 import aiohttp
 
 from .base import Widget
+from .store import WidgetStore
 
 log = logging.getLogger("eg4.widgets.climate_chart")
 
@@ -151,21 +152,56 @@ class ClimateChartWidget(Widget):
 
     default_config = {
         "window_hours": 24,
-        # Share defaults with solar_vitals so the same three sensors
-        # show up on both widgets without double-configuration.
-        "sensors": [
-            {"name": "Sensor 1", "temp_entity": "sensor.temp_humidity_temperature",
-             "humidity_entity": "sensor.temp_humidity_humidity"},
-            {"name": "Sensor 2", "temp_entity": "sensor.temp_humidity_temperature_2",
-             "humidity_entity": "sensor.temp_humidity_humidity_2"},
-            {"name": "Sensor 3", "temp_entity": "sensor.temp_humidity_temperature_3",
-             "humidity_entity": "sensor.temp_humidity_humidity_3"},
-        ],
+        # Empty by default — the widget reads solar_vitals'
+        # ``room_sensors`` list so renames flow through without
+        # double-configuration. Set this list explicitly (via widget
+        # config) only if you want the chart to show a different set
+        # from what Solar Vitals renders.
+        "sensors": [],
     }
+
+    async def _resolve_sensors(
+        self, config: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Explicit ``sensors`` on this widget wins; otherwise borrow
+        from ``solar_vitals.room_sensors`` so renames stay in one place."""
+        explicit = config.get("sensors")
+        if isinstance(explicit, list) and explicit:
+            return explicit
+        try:
+            store = WidgetStore(os.getenv("EG4_DB_PATH", "./eg4_history.db"))
+            sv_cfg = await store.get_config("solar_vitals") or {}
+        except Exception:  # noqa: BLE001
+            sv_cfg = {}
+        return sv_cfg.get("room_sensors") or []
 
     def ha_entities_for(self, config):
         entries = super().ha_entities_for(config)
-        for i, s in enumerate(config.get("sensors") or []):
+        # Show the effective sensor list — falls back to solar_vitals'
+        # ``room_sensors`` when this widget's ``sensors`` is empty, so
+        # the tab reflects what the chart actually plots.
+        explicit = config.get("sensors")
+        if not (isinstance(explicit, list) and explicit):
+            try:
+                # Synchronous access to widget_config for meta purposes only.
+                # ``ha_entities_for`` isn't async; keep this cheap.
+                import sqlite3
+                db_path = os.getenv("EG4_DB_PATH", "./eg4_history.db")
+                con = sqlite3.connect(db_path)
+                row = con.execute(
+                    "SELECT config_json FROM widget_config WHERE widget_id=?",
+                    ("solar_vitals",),
+                ).fetchone()
+                con.close()
+                if row and row[0]:
+                    import json as _json
+                    sv_cfg = _json.loads(row[0])
+                    explicit = sv_cfg.get("room_sensors") or []
+                else:
+                    explicit = []
+            except Exception:  # noqa: BLE001
+                explicit = []
+        for i, s in enumerate(explicit):
             name = s.get("name") or f"Sensor {i+1}"
             for k, kind in (("temp_entity", "temp"),
                             ("humidity_entity", "humidity")):
@@ -202,10 +238,7 @@ class ClimateChartWidget(Widget):
         ).isoformat()
         end_iso = now.isoformat()
 
-        sensors_cfg = (
-            config["sensors"] if "sensors" in config
-            else self.default_config.get("sensors") or []
-        )
+        sensors_cfg = await self._resolve_sensors(config)
 
         sensors_out: list[dict[str, Any]] = []
         async with aiohttp.ClientSession() as http:
