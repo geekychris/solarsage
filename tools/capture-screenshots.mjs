@@ -238,10 +238,9 @@ async function openSettings(page, tabId) {
   // Close any open settings first
   await page.keyboard.press("Escape").catch(() => {});
   await settle(page, 200);
-  // The settings gear is in the header; look for a common label
-  const cog = page.locator('button[title="Settings"]').first();
-  if (await cog.count() > 0) await cog.click();
-  else await page.locator('button:has-text("Settings")').first().click();
+  // Prefer the top-level Dashboard "Settings" text button — widget-
+  // level gears also have title="Settings" and can steal the click.
+  await page.getByRole("button", { name: /^Settings$/ }).first().click();
   await page.waitForSelector(".modal-wide", { timeout: 5000 });
   const tabButton = page.locator(".settings-tab", { hasText: new RegExp(tabName(tabId), "i") }).first();
   if (await tabButton.count() > 0) await tabButton.click();
