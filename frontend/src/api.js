@@ -298,6 +298,18 @@ export const api = {
       method: "POST",
       body: { room, state, duration_minutes },
     }),
+  // HA Integrations
+  getHaIntegrations: () => request("/api/ha/integrations"),
+  putHaIntegration: (widget_id, body) =>
+    request(`/api/ha/integrations/${encodeURIComponent(widget_id)}`, {
+      method: "PUT", body,
+    }),
+  searchHaEntities: (q, domain) => {
+    const qs = new URLSearchParams();
+    if (q) qs.set("q", q);
+    if (domain) qs.set("domain", domain);
+    return request(`/api/ha/entities?${qs}`);
+  },
   // Solar vitals calibration + config
   calibrateSolarVitals: (name, watts) =>
     request("/api/widgets/solar_vitals/calibrate", {

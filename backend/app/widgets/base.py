@@ -49,6 +49,26 @@ class Widget:
     sheets_tab: str = ""              # workbook tab name
     sheets_list_field: str = ""       # config field that holds the array
     sheets_field_order: list[str] = []  # widget field names in column order
+    # HA integration surface — describes which config keys hold HA
+    # ``entity_id`` strings so the Settings → HA Integrations tab can
+    # list them and let the user swap the entity. Each entry:
+    #   {"key": "ha_entity_id", "label": "Water depth sensor",
+    #    "domain": "sensor", "required": True}
+    # Widgets with a variable-length HA entity list (e.g. solar_vitals'
+    # smart_ac rooms) can override ``ha_entities_for(config)``.
+    ha_entities: list[dict[str, Any]] = []
+
+    def ha_entities_for(self, config: dict[str, Any]) -> list[dict[str, Any]]:
+        """Return the list of HA-entity config keys for the current
+        config. Default: return the static ``ha_entities`` list with
+        each entry's ``entity_id`` filled from the config."""
+        out = []
+        for e in self.ha_entities:
+            out.append({
+                **e,
+                "entity_id": config.get(e["key"]) or e.get("default") or "",
+            })
+        return out
 
     def meta(self) -> dict[str, Any]:
         return {

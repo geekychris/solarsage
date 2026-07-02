@@ -42,6 +42,7 @@ from .schemas import LoginRequest, LoginResponse
 from .session_store import Session, SessionStore
 from .storage import History
 from .widgets import WidgetStore, registry as widget_registry, run_widget_refreshers
+from .widgets.base import Widget
 from .widgets.refresher import refresh_now as widget_refresh_now
 from .widgets.tide import TideWidget
 from .widgets.border import BorderWidget
@@ -286,7 +287,7 @@ async def lifespan(app: FastAPI):
     log.info("alerts watcher started")
     if sheets is not None:
         # Materialize any Sheets-backed widget tabs that don't exist yet.
-        for _w in widget_registry.all():
+        for _w in widgetwidget_registry.all():
             if _w.sheets_tab and _w.sheets_field_order:
                 try:
                     await sheets.ensure_tab(_w.sheets_tab, _w.sheets_field_order)
@@ -302,7 +303,7 @@ async def lifespan(app: FastAPI):
     )
     log.info(
         "widget refreshers started (%d widgets, subs=on, mqtt=%s)",
-        len(list(widget_registry.all())), "on" if mqtt else "off",
+        len(list(widgetwidget_registry.all())), "on" if mqtt else "off",
     )
     events_task = asyncio.create_task(
         run_reminder_scheduler(event_store, widget_store)
@@ -1839,7 +1840,7 @@ async def list_widgets(_: Session | None = Depends(require_read)):
     each widget's ``data`` field directly.
     """
     out = []
-    for w in widget_registry.all():
+    for w in widgetwidget_registry.all():
         out.append({"id": w.id, **(await _widget_payload(w))})
     return {"widgets": out}
 
@@ -2494,6 +2495,171 @@ async def calibrate_solar_vitals(
     await widget_store.put_config(w.id, config)
     await widget_refresh_now(w, widget_store, sheets, _SUBS_BUNDLE, mqtt)
     return {"ok": True, "appliances": appliances}
+
+
+# ---------------------------------------------------------------------------
+# HA Integrations — one screen that lists every HA entity SolarSage
+# consumes, shows its live value, and lets the user rebind it. The
+# per-widget contract is the ``ha_entities_for(config)`` method on
+# each Widget subclass.
+# ---------------------------------------------------------------------------
+
+
+async def _ha_get(path: str, params: dict | None = None) -> Any:
+    ha_url = os.getenv("HA_URL", "").rstrip("/")
+    ha_token = os.getenv("HA_TOKEN")
+    if not ha_url or not ha_token:
+        return None
+    headers = {"Authorization": f"Bearer {ha_token}"}
+    try:
+        async with aiohttp.ClientSession() as http:
+            async with http.get(
+                f"{ha_url}{path}", params=params, headers=headers, timeout=15,
+            ) as r:
+                if r.status >= 400:
+                    return None
+                return await r.json()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+@app.get(
+    "/api/ha/integrations",
+    tags=["ha"],
+    summary="List every HA entity SolarSage consumes, per widget, "
+            "with the current live value alongside.",
+)
+async def get_ha_integrations(_: Session | None = Depends(require_read)):
+    ha_url = os.getenv("HA_URL", "").rstrip("/")
+    ha_token = os.getenv("HA_TOKEN")
+    if not ha_url or not ha_token:
+        raise HTTPException(
+            status_code=503,
+            detail="HA_URL + HA_TOKEN not set in backend/.env",
+        )
+
+    # Gather { entity_id: {state, friendly_name, unit, last_updated} } once
+    all_states_payload = await _ha_get("/api/states") or []
+    live: dict[str, dict[str, Any]] = {}
+    for e in all_states_payload:
+        eid = e.get("entity_id")
+        if not eid:
+            continue
+        attrs = e.get("attributes") or {}
+        live[eid] = {
+            "state": e.get("state"),
+            "friendly_name": attrs.get("friendly_name"),
+            "unit": attrs.get("unit_of_measurement"),
+            "last_updated": e.get("last_updated"),
+        }
+
+    out = []
+    for w in widget_registry.all():
+        entries_meta = getattr(w, "ha_entities", None)
+        has_dynamic = w.ha_entities_for.__func__ is not Widget.ha_entities_for
+        if not entries_meta and not has_dynamic:
+            continue
+        cfg = await widget_store.get_config(w.id) or dict(w.default_config)
+        entries = w.ha_entities_for(cfg)
+        if not entries:
+            continue
+        out.append({
+            "widget_id": w.id,
+            "widget_name": w.name,
+            "widget_kind": w.kind,
+            "entities": [
+                {
+                    **e,
+                    "live": live.get(e.get("entity_id") or "") if e.get("entity_id") else None,
+                }
+                for e in entries
+            ],
+        })
+    return {"integrations": out}
+
+
+@app.put(
+    "/api/ha/integrations/{widget_id}",
+    tags=["ha"],
+    summary="Rebind one or more HA entity keys for a widget.",
+)
+async def put_ha_integration(
+    widget_id: str,
+    body: dict[str, str],
+    _: Session | None = Depends(require_read),
+):
+    """Body: ``{"ha_entity_id": "sensor.foo", "smart_ac_status_entity": "sensor.bar"}``.
+    Only keys declared in the widget's ``ha_entities`` list can be
+    updated (dynamic ``smart_ac_room:*`` / ``appliance:*`` entries are
+    read-only). Any listed entity_id must resolve in HA."""
+    w = _require_widget(widget_id)
+    static_keys = {e["key"] for e in (getattr(w, "ha_entities", None) or [])}
+    if not static_keys:
+        raise HTTPException(
+            status_code=400, detail=f"{widget_id} has no editable HA entities",
+        )
+    unknown = [k for k in body if k not in static_keys]
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unknown or read-only keys: {unknown}. "
+                   f"editable: {sorted(static_keys)}",
+        )
+
+    # Validate every entity_id resolves in HA (allow empty string = unset)
+    for k, v in body.items():
+        if not v:
+            continue
+        state = await _ha_get(f"/api/states/{v}")
+        if not state:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{k}={v!r}: HA doesn't recognise that entity",
+            )
+
+    cfg = await widget_store.get_config(w.id) or dict(w.default_config)
+    for k, v in body.items():
+        cfg[k] = v or None
+    await widget_store.put_config(w.id, cfg)
+    try:
+        await widget_refresh_now(w, widget_store, sheets, _SUBS_BUNDLE, mqtt)
+    except Exception:  # noqa: BLE001
+        pass
+    return {"ok": True, "widget_id": widget_id, "updated": list(body)}
+
+
+@app.get(
+    "/api/ha/entities",
+    tags=["ha"],
+    summary="Search HA entities by id substring or friendly name; "
+            "backs the autocomplete in the Integrations tab.",
+)
+async def search_ha_entities(
+    q: str = "",
+    domain: str | None = None,
+    limit: int = 25,
+    _: Session | None = Depends(require_read),
+):
+    payload = await _ha_get("/api/states") or []
+    q = q.strip().lower()
+    hits: list[dict[str, Any]] = []
+    for e in payload:
+        eid = str(e.get("entity_id") or "")
+        if domain and not eid.startswith(f"{domain}."):
+            continue
+        attrs = e.get("attributes") or {}
+        friendly = str(attrs.get("friendly_name") or "")
+        if q and q not in eid.lower() and q not in friendly.lower():
+            continue
+        hits.append({
+            "entity_id": eid,
+            "friendly_name": friendly,
+            "state": e.get("state"),
+            "unit": attrs.get("unit_of_measurement"),
+        })
+        if len(hits) >= limit:
+            break
+    return {"entities": hits}
 
 
 SMART_AC_ROOMS = {"master", "guest", "dining", "living", "office", "kyle"}

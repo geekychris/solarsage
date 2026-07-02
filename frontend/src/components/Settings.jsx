@@ -2,11 +2,13 @@ import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
 import RotationConfigWidget from "./widgets/RotationConfigWidget.jsx";
 import NotificationsConfig from "./NotificationsConfig.jsx";
+import HaIntegrationsConfig from "./HaIntegrationsConfig.jsx";
 
 const TABS = [
   { id: "system", label: "System" },
   { id: "rotation", label: "Rotation" },
   { id: "notifications", label: "Notifications" },
+  { id: "ha", label: "HA Integrations" },
 ];
 
 export default function Settings({ open, onClose, onSaved }) {
@@ -151,6 +153,8 @@ export default function Settings({ open, onClose, onSaved }) {
         )}
 
         {active === "notifications" && <NotificationsConfig />}
+
+        {active === "ha" && <HaIntegrationsConfig />}
       </div>
     </div>
   );

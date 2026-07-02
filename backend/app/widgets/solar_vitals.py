@@ -284,6 +284,47 @@ class SolarVitalsWidget(Widget):
     default_tab = "Solar"
     default_position = 3
 
+    # smart_ac + calibration entities are fixed by convention; the
+    # per-room booleans are derived dynamically from ``smart_ac_rooms``
+    # (see ``ha_entities_for``).
+    ha_entities = [
+        {"key": "smart_ac_calibration_entity",
+         "label": "smart_ac calibration sensor",
+         "domain": "sensor", "required": False,
+         "default": "sensor.smart_ac_calibration"},
+        {"key": "smart_ac_status_entity",
+         "label": "smart_ac status sensor",
+         "domain": "sensor", "required": False,
+         "default": "sensor.smart_ac_status"},
+    ]
+
+    def ha_entities_for(self, config):
+        entries = super().ha_entities_for(config)
+        # One row per configured smart_ac room — the entity is derived
+        # from the room slug but we surface it so the user can see the
+        # mapping and (via the appliances config) opt out.
+        for room in config.get("smart_ac_rooms") or []:
+            entries.append({
+                "key": f"smart_ac_room:{room}",
+                "label": f"AC — {room.capitalize()} (input_boolean)",
+                "domain": "input_boolean",
+                "required": False,
+                "entity_id": f"input_boolean.ac_{room}",
+                "read_only": True,
+            })
+        # And per-appliance HA entity ids from the appliances list
+        for a in config.get("appliances") or []:
+            if a.get("ha_entity_id"):
+                entries.append({
+                    "key": f"appliance:{a['name']}",
+                    "label": f"Appliance — {a['name']}",
+                    "domain": (a["ha_entity_id"].split(".", 1)[0]),
+                    "required": False,
+                    "entity_id": a["ha_entity_id"],
+                    "read_only": True,
+                })
+        return entries
+
     config_schema = {
         "type": "object",
         "properties": {

@@ -1692,6 +1692,46 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
 .sv-smart-ac-btn.danger  { background: rgba(239,111,108,0.2); border-color: #ef6f6c; color: #ef6f6c; }
 .sv-smart-ac-btn.ghost   { opacity: 0.7; }
 
+/* HA Integrations tab */
+.ha-card {
+  padding: 12px; margin-bottom: 12px;
+  border: 1px solid var(--border, #232a35); border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+}
+.ha-card-head { margin-bottom: 8px; font-size: 13px; }
+.ha-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.ha-table th, .ha-table td {
+  text-align: left; padding: 6px 8px; vertical-align: top;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.ha-table th { font-weight: 600; color: var(--muted, #888); }
+.ha-picker { position: relative; }
+.ha-picker input {
+  width: 100%; padding: 4px 6px; font-size: 12px;
+  background: rgba(255,255,255,0.05); color: inherit;
+  border: 1px solid var(--border, #232a35); border-radius: 3px;
+  font-family: ui-monospace, monospace;
+}
+.ha-picker-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 20;
+  max-height: 240px; overflow-y: auto;
+  background: var(--panel, #181c22);
+  border: 1px solid var(--border, #232a35);
+  border-radius: 3px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.ha-picker-hit {
+  padding: 6px 8px; cursor: pointer; font-size: 12px;
+}
+.ha-picker-hit:hover { background: rgba(108,209,255,0.15); }
+.ha-picker-busy { position: absolute; right: 6px; top: 4px; font-size: 11px; opacity: 0.6; }
+.ha-live-missing { color: #ef6f6c; font-size: 12px; }
+.ha-live { font-size: 12px; }
+.ha-live.stale { opacity: 0.6; }
+.ha-readonly { margin-top: 8px; }
+.ha-readonly summary { cursor: pointer; padding: 4px 0; }
+.ha-readonly code { font-size: 11px; }
+
 /* Water tank */
 .water-tank-top {
   display: flex; gap: 16px; align-items: center; margin-bottom: 8px;

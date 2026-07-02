@@ -81,6 +81,15 @@ class WaterTankWidget(Widget):
         },
     }
 
+    ha_entities = [
+        {"key": "ha_entity_id",         "label": "Water depth (live)",
+         "domain": "sensor", "required": True},
+        {"key": "ha_entity_id_max_24h", "label": "Water depth — max over 24h",
+         "domain": "sensor", "required": False},
+        {"key": "ha_entity_id_max_7d",  "label": "Water depth — max over 7d",
+         "domain": "sensor", "required": False},
+    ]
+
     config_schema = {
         "type": "object",
         "properties": {
