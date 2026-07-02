@@ -175,7 +175,19 @@ class TideWidget(Widget):
     async def fetch(self, config: dict[str, Any]) -> dict[str, Any]:
         provider = str(config.get("provider") or "tidetime").lower()
         days = int(config.get("days", 7))
-        stations = config.get("stations") or []
+        stations = list(config.get("stations") or [])
+        # Backfill tidetime_slug from defaults for stations whose
+        # persisted config predates the provider switch.
+        default_slugs = {
+            s["id"]: s.get("tidetime_slug")
+            for s in self.default_config.get("stations") or []
+            if s.get("tidetime_slug")
+        }
+        for st in stations:
+            if provider == "tidetime" and not st.get("tidetime_slug"):
+                fallback = default_slugs.get(st.get("id"))
+                if fallback:
+                    st["tidetime_slug"] = fallback
 
         results: list[dict[str, Any]] = []
         async with aiohttp.ClientSession() as http:
