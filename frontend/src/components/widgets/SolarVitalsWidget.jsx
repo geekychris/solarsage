@@ -557,6 +557,21 @@ export default function SolarVitalsWidget({ data, onChanged }) {
         </div>
       </div>
 
+      {Array.isArray(l.temperatures) && l.temperatures.length > 0 && (
+        <div className="sv-temps">
+          {l.temperatures.map((t) => (
+            <div key={t.entity_id} className="sv-temp">
+              <div className="sv-temp-label">{t.label}</div>
+              <div className="sv-temp-value">
+                {t.value != null
+                  ? `${t.value.toFixed(1)}${t.unit || "°"}`
+                  : "—"}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {p && (
         <div className={`sv-projection sv-${p.direction}`}>
           {p.direction === "charging" ? "🔌 Full" : "🪫 Empty"} in{" "}

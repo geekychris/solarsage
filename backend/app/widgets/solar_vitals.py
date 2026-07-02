@@ -296,6 +296,17 @@ class SolarVitalsWidget(Widget):
          "label": "smart_ac status sensor",
          "domain": "sensor", "required": False,
          "default": "sensor.smart_ac_status"},
+        # Three temperature sensors surfaced in the widget header. Any
+        # or all may be blank — the UI renders only the ones set.
+        {"key": "temp_living_entity",
+         "label": "Living room temperature",
+         "domain": "sensor", "required": False},
+        {"key": "temp_master_entity",
+         "label": "Master bedroom temperature",
+         "domain": "sensor", "required": False},
+        {"key": "temp_outdoor_entity",
+         "label": "Outdoor temperature",
+         "domain": "sensor", "required": False},
     ]
 
     def ha_entities_for(self, config):
@@ -489,6 +500,7 @@ class SolarVitalsWidget(Widget):
         ha_token = os.getenv("HA_TOKEN")
         ha_states: dict[str, str | None] = {}
         smart_ac_rooms: list[dict] = []
+        temperatures: list[dict] = []
         if ha_url and ha_token:
             async with aiohttp.ClientSession() as http:
                 targets = [
@@ -512,6 +524,35 @@ class SolarVitalsWidget(Widget):
                     smart_ac_rooms = await _fetch_smart_ac(
                         http, ha_url, ha_token, rooms,
                     )
+                # Optional room temperature sensors — any/all may be
+                # blank, in which case that slot is skipped.
+                for label, key in (
+                    ("Living",  "temp_living_entity"),
+                    ("Master",  "temp_master_entity"),
+                    ("Outdoor", "temp_outdoor_entity"),
+                ):
+                    eid = config.get(key) or ""
+                    if not eid:
+                        continue
+                    entity = await _ha_entity(http, ha_url, ha_token, eid)
+                    if not entity:
+                        continue
+                    state = entity.get("state")
+                    unit = (entity.get("attributes") or {}).get(
+                        "unit_of_measurement", ""
+                    )
+                    try:
+                        value = float(state) if state not in (
+                            None, "", "unavailable", "unknown"
+                        ) else None
+                    except (TypeError, ValueError):
+                        value = None
+                    temperatures.append({
+                        "label": label,
+                        "entity_id": eid,
+                        "value": value,
+                        "unit": unit,
+                    })
 
         on_list = []
         for a in appliances_cfg:
@@ -635,6 +676,7 @@ class SolarVitalsWidget(Widget):
                 # watts, whether ON or OFF (so the UI can show all six
                 # ACs even when only some are running).
                 "smart_ac_rooms": smart_ac_rooms,
+                "temperatures": temperatures,
             },
             "battery_flow": {
                 "charge_kw":    round(charge_kw, 2),

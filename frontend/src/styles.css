@@ -1608,11 +1608,13 @@ select, input {
 .sv2-string strong { color: #ffd166; font-variant-numeric: tabular-nums; }
 
 .sv2-pie-row {
-  display: grid; grid-template-columns: auto 1fr;
+  display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr);
   gap: 12px; align-items: start;
   padding: 8px; border-radius: 6px;
   background: rgba(255,255,255,0.03);
+  overflow: hidden; /* belt-and-braces against child overflow */
 }
+.sv2-pie-row > * { min-width: 0; }
 .sv-pie-wrap { display: flex; gap: 12px; align-items: center; }
 .sv-pie-legend { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
 .sv-pie-leg-row {
@@ -1633,9 +1635,28 @@ select, input {
 .sv-pie-slice.hover { filter: brightness(1.25); }
 
 .sv-appliances {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 4px;
+  min-width: 0;
 }
+.sv-appliance { min-width: 0; }
+.sv-app-toggle {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Room temperatures row */
+.sv-temps {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 6px; margin: 6px 0;
+}
+.sv-temp {
+  padding: 6px 8px; border-radius: 4px;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(108,209,255,0.08);
+  text-align: center;
+}
+.sv-temp-label { font-size: 10px; opacity: 0.75; }
+.sv-temp-value { font-size: 18px; font-weight: 700; margin-top: 2px; }
 .sv-smart-ac { margin-top: 10px; }
 .sv-smart-ac-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
