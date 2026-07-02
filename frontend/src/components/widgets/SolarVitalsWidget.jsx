@@ -371,6 +371,134 @@ function ApplianceGrid({ data, onChanged }) {
   );
 }
 
+// --------- smart_ac control grid --------------------------------------
+
+const OVERRIDE_PRESETS = [
+  { label: "30 m", minutes: 30 },
+  { label: "1 h",  minutes: 60 },
+  { label: "2 h",  minutes: 120 },
+  { label: "4 h",  minutes: 240 },
+];
+
+function SmartAcGrid({ rooms, onChanged }) {
+  const [openRoom, setOpenRoom] = useState(null);
+  const [duration, setDuration] = useState(60);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function flip(room, nextState, mins) {
+    setBusy(true);
+    setErr("");
+    try {
+      await api.smartAcOverride({
+        room, state: nextState, duration_minutes: mins,
+      });
+      if (onChanged) await onChanged();
+      setOpenRoom(null);
+    } catch (ex) {
+      setErr(ex.message || "override failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="sv-smart-ac">
+      <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
+        Air conditioners — tap a chip to override the smart_ac scheduler.
+        Watts are scaled to fit measured load.
+      </div>
+      <div className="sv-smart-ac-grid">
+        {rooms.map((r) => {
+          const rated = r.rated_watts;
+          const scale = r.scale;
+          const title = [
+            `${r.entity_id} — ${r.state}`,
+            r.note && r.note !== "ok" ? `(${r.note})` : null,
+            rated && scale != null && scale < 0.999
+              ? `rated ${rated} W · scale ${(scale * 100).toFixed(0)}%`
+              : null,
+          ].filter(Boolean).join(" · ");
+          return (
+            <button
+              key={r.room}
+              type="button"
+              className={`sv-smart-ac-chip ${r.on ? "on" : "off"}`}
+              title={title}
+              disabled={busy}
+              onClick={() => {
+                setOpenRoom(r.room === openRoom ? null : r.room);
+              }}
+            >
+              <div className="sv-smart-ac-name">{r.name || r.room}</div>
+              <div className="sv-smart-ac-watts">
+                {r.on ? `${(Number(r.watts) / 1000).toFixed(2)} kW` : "off"}
+              </div>
+              {r.on && rated && scale != null && scale < 0.999 && (
+                <div className="sv-smart-ac-rated">
+                  of {(rated / 1000).toFixed(1)} kW rated
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {err && <div className="error-inline">{err}</div>}
+      {openRoom && (() => {
+        const r = rooms.find((x) => x.room === openRoom);
+        if (!r) return null;
+        const isOn = r.on;
+        return (
+          <div className="sv-smart-ac-override">
+            <div style={{ fontSize: 12, marginBottom: 6 }}>
+              Override <strong>{r.name}</strong> — smart_ac will leave it alone
+              for the picked window.
+            </div>
+            <div className="sv-smart-ac-duration">
+              {OVERRIDE_PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  className={duration === p.minutes ? "active" : ""}
+                  onClick={() => setDuration(p.minutes)}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="sv-smart-ac-actions">
+              <button type="button"
+                      className="sv-smart-ac-btn danger"
+                      disabled={busy}
+                      onClick={() => flip(openRoom, "off", duration)}>
+                Turn OFF for {duration}m
+              </button>
+              <button type="button"
+                      className="sv-smart-ac-btn primary"
+                      disabled={busy}
+                      onClick={() => flip(openRoom, "on", duration)}>
+                Turn ON for {duration}m
+              </button>
+              <button type="button"
+                      className="sv-smart-ac-btn"
+                      disabled={busy}
+                      onClick={() => flip(openRoom, isOn ? "on" : "off", 0)}
+                      title="Clear the override; smart_ac resumes control on next tick">
+                Release to smart_ac
+              </button>
+              <button type="button"
+                      className="sv-smart-ac-btn ghost"
+                      onClick={() => setOpenRoom(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
 // --------- Main component ---------------------------------------------
 
 export default function SolarVitalsWidget({ data, onChanged }) {
@@ -454,43 +582,7 @@ export default function SolarVitalsWidget({ data, onChanged }) {
       )}
 
       {Array.isArray(l.smart_ac_rooms) && l.smart_ac_rooms.length > 0 && (
-        <div className="sv-smart-ac">
-          <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
-            Air conditioners (live from Home Assistant · watts scaled to fit measured load)
-          </div>
-          <div className="sv-smart-ac-grid">
-            {l.smart_ac_rooms.map((r) => {
-              const rated = r.rated_watts;
-              const scale = r.scale;
-              const title = [
-                `${r.entity_id} — ${r.state}`,
-                r.note && r.note !== "ok" ? `(${r.note})` : null,
-                rated && scale != null && scale < 0.999
-                  ? `rated ${rated} W · scale ${(scale * 100).toFixed(0)}%`
-                  : null,
-              ].filter(Boolean).join(" · ");
-              return (
-                <div
-                  key={r.room}
-                  className={`sv-smart-ac-chip ${r.on ? "on" : "off"}`}
-                  title={title}
-                >
-                  <div className="sv-smart-ac-name">{r.name || r.room}</div>
-                  <div className="sv-smart-ac-watts">
-                    {r.on
-                      ? `${(Number(r.watts) / 1000).toFixed(2)} kW`
-                      : "off"}
-                  </div>
-                  {r.on && rated && scale != null && scale < 0.999 && (
-                    <div className="sv-smart-ac-rated">
-                      of {(rated / 1000).toFixed(1)} kW rated
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <SmartAcGrid rooms={l.smart_ac_rooms} onChanged={onChanged} />
       )}
 
       {Object.keys(today).length > 0 && (

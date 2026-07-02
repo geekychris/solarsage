@@ -292,6 +292,12 @@ export const api = {
     request("/api/announcements", { method: "PUT", body: config }),
   ingestAnnouncements: () =>
     request("/api/announcements/ingest", { method: "POST" }),
+  // Smart AC override (delegates to Home Assistant)
+  smartAcOverride: ({ room, state, duration_minutes = 0 }) =>
+    request("/api/smart_ac/override", {
+      method: "POST",
+      body: { room, state, duration_minutes },
+    }),
   // Solar vitals calibration + config
   calibrateSolarVitals: (name, watts) =>
     request("/api/widgets/solar_vitals/calibrate", {

@@ -6,6 +6,31 @@ and (if desired) control the air-conditioners in the San Felipe house.
 Copy this into your Claude Code session's context, or leave it on disk
 for future sessions to discover.
 
+## Sibling repo
+
+Everything below is *implemented* in the homeassistant repo:
+
+- **GitHub**: https://github.com/geekychris/homeassistant_work_sanfelipe
+- **Local clone**: `~/code/claude_world/homeassistant`
+
+This SolarSage repo (`github.com/geekychris/solarsage`) is the *consumer*.
+When making changes that touch AC control, keep the two repos in sync —
+if you add an entity or change semantics, update this doc *and* mention it
+in the homeassistant repo's README (which links back here).
+
+**What SolarSage now does with smart_ac** (as of 2026-07):
+
+- Reads `sensor.smart_ac_calibration` + `input_boolean.ac_<room>` to render
+  a live per-room chip row in the Solar Vitals widget with scaled watts.
+- Exposes `POST /api/smart_ac/override` — a thin wrapper that flips
+  `input_boolean.ac_<room>` **and** sets
+  `input_datetime.ac_<room>_override_until` so the scheduler stops
+  re-evaluating that room until the timer expires. Frontend surfaces this
+  as a "Turn ON/OFF for {30m,1h,2h,4h}" popover under each AC chip, plus
+  a "Release to smart_ac" button that clears the override.
+- Does *not* touch `input_boolean.smart_ac_enabled`. That kill switch is
+  user-only (per this doc's guidance).
+
 ---
 
 ## Background: what `smart_ac` is

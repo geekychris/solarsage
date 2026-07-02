@@ -1656,6 +1656,41 @@ select, input {
 .sv-smart-ac-name { font-weight: 600; }
 .sv-smart-ac-watts { font-size: 12px; margin-top: 2px; }
 .sv-smart-ac-rated { font-size: 10px; opacity: 0.7; margin-top: 1px; }
+button.sv-smart-ac-chip {
+  cursor: pointer; color: inherit; font-family: inherit;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+button.sv-smart-ac-chip:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+.sv-smart-ac-override {
+  margin-top: 8px; padding: 10px;
+  border: 1px solid var(--border, #232a35); border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+}
+.sv-smart-ac-duration { display: flex; gap: 4px; margin-bottom: 8px; }
+.sv-smart-ac-duration button {
+  flex: 1; padding: 6px; font-size: 12px;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(255,255,255,0.03);
+  color: inherit; border-radius: 4px; cursor: pointer;
+}
+.sv-smart-ac-duration button.active {
+  background: rgba(108,209,255,0.2); border-color: #6cd1ff; color: #6cd1ff;
+}
+.sv-smart-ac-actions {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+}
+.sv-smart-ac-btn {
+  padding: 8px; font-size: 12px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(255,255,255,0.05); color: inherit;
+}
+.sv-smart-ac-btn:disabled { opacity: 0.5; cursor: default; }
+.sv-smart-ac-btn.primary { background: rgba(111,220,140,0.2); border-color: #6fdc8c; color: #6fdc8c; }
+.sv-smart-ac-btn.danger  { background: rgba(239,111,108,0.2); border-color: #ef6f6c; color: #ef6f6c; }
+.sv-smart-ac-btn.ghost   { opacity: 0.7; }
 
 /* Water tank */
 .water-tank-top {

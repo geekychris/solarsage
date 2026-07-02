@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import aiohttp
 import os
 import re
 import time
@@ -2493,6 +2494,112 @@ async def calibrate_solar_vitals(
     await widget_store.put_config(w.id, config)
     await widget_refresh_now(w, widget_store, sheets, _SUBS_BUNDLE, mqtt)
     return {"ok": True, "appliances": appliances}
+
+
+SMART_AC_ROOMS = {"master", "guest", "dining", "living", "office", "kyle"}
+
+
+@app.post(
+    "/api/smart_ac/override",
+    tags=["smart_ac"],
+    summary="Turn a smart_ac room on/off with an optional pin duration",
+)
+async def smart_ac_override(
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Body: ``{"room": "living", "state": "on"|"off",
+    "duration_minutes": 60}``. Calls Home Assistant to flip
+    ``input_boolean.ac_<room>`` and (when duration > 0) sets
+    ``input_datetime.ac_<room>_override_until`` so the smart_ac
+    scheduler leaves the room alone until that time. duration=0
+    (or missing) clears any existing override so the scheduler
+    resumes control on its next 5-min tick.
+
+    See ~/code/claude_world/homeassistant for the scheduler that
+    reads these entities.
+    """
+    room = str(body.get("room") or "").strip().lower()
+    state = str(body.get("state") or "").strip().lower()
+    duration = int(body.get("duration_minutes") or 0)
+
+    if room not in SMART_AC_ROOMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"room must be one of {sorted(SMART_AC_ROOMS)}",
+        )
+    if state not in ("on", "off"):
+        raise HTTPException(status_code=400, detail="state must be 'on' or 'off'")
+    if duration < 0 or duration > 24 * 60:
+        raise HTTPException(
+            status_code=400, detail="duration_minutes must be 0..1440",
+        )
+
+    ha_url = os.getenv("HA_URL", "").rstrip("/")
+    ha_token = os.getenv("HA_TOKEN")
+    if not ha_url or not ha_token:
+        raise HTTPException(
+            status_code=500, detail="HA_URL + HA_TOKEN not set in backend/.env",
+        )
+
+    boolean_eid = f"input_boolean.ac_{room}"
+    dt_eid = f"input_datetime.ac_{room}_override_until"
+
+    # 1. Flip the boolean
+    service = "turn_on" if state == "on" else "turn_off"
+    headers = {
+        "Authorization": f"Bearer {ha_token}",
+        "Content-Type": "application/json",
+    }
+    async with aiohttp.ClientSession() as http:
+        async with http.post(
+            f"{ha_url}/api/services/input_boolean/{service}",
+            json={"entity_id": boolean_eid},
+            headers=headers, timeout=10,
+        ) as r:
+            if r.status >= 400:
+                text = (await r.text())[:200]
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"HA {service} failed: {r.status} {text}",
+                )
+
+        # 2. Set / clear the override datetime
+        if duration > 0:
+            until = datetime.now().astimezone() + timedelta(minutes=duration)
+            dt_str = until.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            dt_str = "1970-01-01 00:00:00"
+            until = None
+        async with http.post(
+            f"{ha_url}/api/services/input_datetime/set_datetime",
+            json={"entity_id": dt_eid, "datetime": dt_str},
+            headers=headers, timeout=10,
+        ) as r:
+            if r.status >= 400:
+                text = (await r.text())[:200]
+                # Boolean was flipped, but override didn't set — return
+                # a partial-success so the caller can decide.
+                return {
+                    "ok": False,
+                    "detail": f"boolean flipped but override failed: {r.status} {text}",
+                    "room": room, "state": state,
+                }
+
+    # Force a solar_vitals refresh so the widget reflects the change immediately
+    try:
+        w = _require_widget("solar_vitals")
+        await widget_refresh_now(w, widget_store, sheets, _SUBS_BUNDLE, mqtt)
+    except Exception:  # noqa: BLE001
+        pass
+
+    return {
+        "ok": True,
+        "room": room,
+        "state": state,
+        "duration_minutes": duration,
+        "override_until": until.isoformat() if until else None,
+    }
 
 
 @app.post(
