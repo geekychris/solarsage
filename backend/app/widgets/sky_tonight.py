@@ -247,8 +247,8 @@ class SkyTonightWidget(Widget):
     default_config = {"lat": 31.025, "lon": -114.838}
 
     async def fetch(self, config: dict[str, Any]) -> dict[str, Any]:
-        lat = float(config.get("lat", 31.025))
-        lon = float(config.get("lon", -114.838))
+        lat = float(config.get("lat") or os.getenv("SOLARSAGE_LAT", "31.025"))
+        lon = float(config.get("lon") or os.getenv("SOLARSAGE_LON", "-114.838"))
         now = datetime.now(timezone.utc)
         # Compute for the evening of the current local date
         local_now = now.astimezone()

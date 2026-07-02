@@ -117,8 +117,8 @@ class WhenToRunWidget(Widget):
             config.get("peak_kw_override")
             or await _read_setting(db_path, "peak_kw", 10.0),
         )
-        lat = float(config.get("lat", 31.025))
-        lon = float(config.get("lon", -114.838))
+        lat = float(config.get("lat") or os.getenv("SOLARSAGE_LAT", "31.025"))
+        lon = float(config.get("lon") or os.getenv("SOLARSAGE_LON", "-114.838"))
         baseline_kw = float(config.get("baseline_kw", 0.6))
 
         async with aiohttp.ClientSession() as http:

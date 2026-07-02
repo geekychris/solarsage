@@ -3,6 +3,7 @@ import { api } from "../api.js";
 import RotationConfigWidget from "./widgets/RotationConfigWidget.jsx";
 import NotificationsConfig from "./NotificationsConfig.jsx";
 import HaIntegrationsConfig from "./HaIntegrationsConfig.jsx";
+import LocationPicker from "./LocationPicker.jsx";
 
 const TABS = [
   { id: "system", label: "System" },
@@ -130,6 +131,23 @@ export default function Settings({ open, onClose, onSaved }) {
             </div>
             {err && <div className="error">{err}</div>}
             <div className="grid-2">
+              <div className="field" style={{ gridColumn: "span 2" }}>
+                <label>Location</label>
+                <LocationPicker
+                  lat={Number(s.lat) || 31.025}
+                  lon={Number(s.lon) || -114.838}
+                  onChange={({ lat, lon }) => {
+                    up("lat", String(lat));
+                    up("lon", String(lon));
+                  }}
+                  height={220}
+                />
+                <span className="muted" style={{ fontSize: 11 }}>
+                  Click or drag the marker to set. Used by weather /
+                  solar-forecast / astronomy widgets that don't have
+                  their own explicit lat/lon.
+                </span>
+              </div>
               <div className="field">
                 <label>Latitude (north +)</label>
                 <input value={s.lat} onChange={(e) => up("lat", e.target.value)} />

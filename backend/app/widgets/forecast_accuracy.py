@@ -136,8 +136,8 @@ class ForecastAccuracyWidget(Widget):
     async def fetch(self, config: dict[str, Any]) -> dict[str, Any]:
         db_path = os.getenv("EG4_DB_PATH", "./eg4_history.db")
         window_days = int(config.get("window_days", 30))
-        lat = float(config.get("lat", 31.025))
-        lon = float(config.get("lon", -114.838))
+        lat = float(config.get("lat") or os.getenv("SOLARSAGE_LAT", "31.025"))
+        lon = float(config.get("lon") or os.getenv("SOLARSAGE_LON", "-114.838"))
 
         serial = await _first_serial(db_path)
         if not serial:

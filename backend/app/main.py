@@ -662,6 +662,16 @@ async def _refresh_integration_cache() -> None:
             # settings edits without a redeploy. Uppercase env-var
             # convention matches what the codebase already reads.
             os.environ[k.upper()] = v
+    # Mirror global location too — widgets that need lat/lon and don't
+    # have widget-config overrides can consult SOLARSAGE_LAT / _LON.
+    for k in ("lat", "lon"):
+        v = raw.get(k)
+        try:
+            v = json.loads(v) if v is not None else None
+        except Exception:  # noqa: BLE001
+            pass
+        if isinstance(v, (int, float, str)):
+            os.environ[f"SOLARSAGE_{k.upper()}"] = str(v)
 
 
 def _tz_offset_minutes(tz_name: str) -> int:
