@@ -693,6 +693,20 @@ def _location_from(settings: dict) -> LocationConfig:
 async def get_settings(session: Session = Depends(require_session)):
     s = await _load_settings()
     s["tz_offset_minutes"] = _tz_offset_minutes(str(s.get("tz", "America/Tijuana")))
+    # Fall back to env vars for the integration secrets so the UI shows
+    # whatever value is currently in use (DB wins; env is the fallback).
+    # This is what makes the "reveal eye" work even before the user
+    # saves to DB — the field shows what's really configured.
+    integration_keys = (
+        "ha_url", "ha_token", "tts_url",
+        "notify_telegram_service", "notify_telegram_target",
+        "worldtides_api_key", "eia_api_key",
+    )
+    for k in integration_keys:
+        if not s.get(k):
+            env_v = os.getenv(k.upper())
+            if env_v:
+                s[k] = env_v
     return s
 
 
