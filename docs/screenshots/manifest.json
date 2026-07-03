@@ -24,24 +24,8 @@
     "caption": "Solar Vitals — SoC, PV per string, load breakdown, per-AC override, per-room temp/humidity"
   },
   {
-    "file": "07-widget-climate-chart.png",
-    "caption": "Room Climate History — 24h/3d/7d temp + humidity with hover crosshair"
-  },
-  {
     "file": "08-widget-water-tank.png",
     "caption": "Water Tank — gallons + days-remaining projection with tiered warning bar"
-  },
-  {
-    "file": "09-widget-peak-load.png",
-    "caption": "Peak Load — rolling 30-day max simultaneous house load"
-  },
-  {
-    "file": "10-widget-acpv-overlay.png",
-    "caption": "AC vs PV Overlay — 24h of PV production against smart_ac consumption"
-  },
-  {
-    "file": "11-widget-sky-tonight.png",
-    "caption": "Sky Tonight — naked-eye planets tonight + moon phase, computed locally"
   },
   {
     "file": "12-settings-system.png",
@@ -66,5 +50,165 @@
   {
     "file": "17-mobile-dashboard.png",
     "caption": "Mobile viewport — same widgets, 1-column grid"
+  },
+  {
+    "file": "20-widget-aqi.png",
+    "caption": "Air Quality — US AQI + PM2.5/PM10/ozone/dust + 24h peak. Source: Open-Meteo."
+  },
+  {
+    "file": "21-widget-quakes.png",
+    "caption": "Earthquakes — recent felt quakes (M ≥ 2.5) within a configurable radius. Source: USGS."
+  },
+  {
+    "file": "22-widget-storms.png",
+    "caption": "Tropical storms — active NHC cyclones, filtered to configured basins (default EP)."
+  },
+  {
+    "file": "23-widget-uv_heat.png",
+    "caption": "UV & heat — peak UV time + apparent-temperature danger window today and tomorrow."
+  },
+  {
+    "file": "24-widget-weather.png",
+    "caption": "Weather — current conditions + 7-day forecast (Open-Meteo)."
+  },
+  {
+    "file": "25-widget-tides.png",
+    "caption": "Tide tables — highs/lows from the tidetime.org scraper (no API key)."
+  },
+  {
+    "file": "26-widget-marine.png",
+    "caption": "Marine — wave height, wind, sea temperature + 'best window' hint."
+  },
+  {
+    "file": "27-widget-sea_temp.png",
+    "caption": "Sea surface temp — current + 7-day forecast + swim/fishing context."
+  },
+  {
+    "file": "28-widget-sun_moon.png",
+    "caption": "Sun & moon — sunrise/sunset/solar noon + moon phase (local math, no API)."
+  },
+  {
+    "file": "29-widget-sunset.png",
+    "caption": "Sunset countdown — live-ticking minutes to sunset with 'golden 20' highlight."
+  },
+  {
+    "file": "30-widget-fishing_window.png",
+    "caption": "Fishing windows — best hours today/tomorrow from tide movement + dawn/dusk + sea state."
+  },
+  {
+    "file": "31-widget-whale_season.png",
+    "caption": "Whale watching season — Sea of Cortez fin/blue/gray whale indicator."
+  },
+  {
+    "file": "32-widget-meteor_showers.png",
+    "caption": "Meteor showers — next shower peak with ZHR + hint. Announces N days before."
+  },
+  {
+    "file": "33-widget-bird_migration.png",
+    "caption": "Bird migration — species currently moving through the Baja Pacific Flyway."
+  },
+  {
+    "file": "34-widget-border.png",
+    "caption": "Border wait times — CBP data for US-Mexico crossings."
+  },
+  {
+    "file": "35-widget-costco_fuel.png",
+    "caption": "Fuel prices — real CA retail avg from EIA + live per-station Pemex from CRE + manual Costco."
+  },
+  {
+    "file": "36-widget-return_countdown.png",
+    "caption": "Return countdown — days to your next drive back north."
+  },
+  {
+    "file": "37-widget-currency.png",
+    "caption": "MXN/USD — daily rate from Frankfurter (ECB) with a 14-day trailing series."
+  },
+  {
+    "file": "38-widget-drive_time.png",
+    "caption": "Drive times — OSRM distance + duration between configured points."
+  },
+  {
+    "file": "39-widget-holidays.png",
+    "caption": "Mexican holidays — federal public holidays with next-holiday countdown."
+  },
+  {
+    "file": "40-widget-trip_planner.png",
+    "caption": "Trip planner — daily 'go-score' combining drive time + border wait + weather."
+  },
+  {
+    "file": "41-widget-consumption_yoy.png",
+    "caption": "Consumption YoY — today's load vs. same-day-last-year from EG4 history."
+  },
+  {
+    "file": "42-widget-forecast_accuracy.png",
+    "caption": "Forecast accuracy — 30 days of forecast vs actual PV; tune peak_kw when biased."
+  },
+  {
+    "file": "43-widget-property_mode.png",
+    "caption": "Property mode — Occupied / Vacant / Arriving date; other widgets adjust off this."
+  },
+  {
+    "file": "44-widget-solar_excess.png",
+    "caption": "Excess-energy planner — today's expected surplus + suggested loads for midday."
+  },
+  {
+    "file": "45-widget-precool.png",
+    "caption": "Pre-cool advisor — window based on apparent-temperature peak and current SoC."
+  },
+  {
+    "file": "46-widget-when_to_run.png",
+    "caption": "When to run — best contiguous window today/tomorrow per configured high-load appliance."
+  },
+  {
+    "file": "47-widget-baja_news.png",
+    "caption": "Baja news — configurable regional RSS/Atom outlets."
+  },
+  {
+    "file": "48-widget-baja_races.png",
+    "caption": "Baja races — SCORE International off-road schedule with ★ for SF-involved events."
+  },
+  {
+    "file": "49-widget-hoa_newsletter.png",
+    "caption": "HOA newsletter — latest El Dorado Ranch weekly PDF, auto-scraped."
+  },
+  {
+    "file": "50-widget-hoa.png",
+    "caption": "El Dorado Ranch activities — auto-parsed weekly activities PDF."
+  },
+  {
+    "file": "51-widget-news.png",
+    "caption": "News — configurable RSS/Atom feeds (defaults: NHC + USGS)."
+  },
+  {
+    "file": "52-widget-property_tax.png",
+    "caption": "Property tax — San Felipe predial countdown with paid-this-year toggle."
+  },
+  {
+    "file": "53-widget-reservations.png",
+    "caption": "Reservations — upcoming bookings from configured iCal URLs."
+  },
+  {
+    "file": "54-widget-spanish.png",
+    "caption": "Spanish practice — daily phrase, speak button (via pi5 TTS), and dictation quiz."
+  },
+  {
+    "file": "55-widget-border_log.png",
+    "caption": "Border crossing log — every crossing with direction, port, actual vs quoted wait, notes."
+  },
+  {
+    "file": "56-widget-contacts.png",
+    "caption": "Contacts — address book (name/phone/email/location) shared with the phone."
+  },
+  {
+    "file": "57-widget-quicklinks.png",
+    "caption": "Quick links — grouped bookmarks. Ships an 'Apps' group with smart_ac + HA."
+  },
+  {
+    "file": "58-widget-shopping_list.png",
+    "caption": "Shopping list — items to buy in the US on your next border run."
+  },
+  {
+    "file": "59-widget-todo.png",
+    "caption": "Todo — priority (1..5), optional due date, done flag, notes. Syncs to Sheets when enabled."
   }
 ]
