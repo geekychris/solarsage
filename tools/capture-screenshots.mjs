@@ -413,6 +413,13 @@ async function main() {
   async function ensureLocalTab() {
     const isOnLocal = await page.locator(".local-subtab").count();
     if (isOnLocal > 0) return;
+    // If the top-level tab bar isn't visible either, we've navigated
+    // away (rotation view, elsewhere) — reload the dashboard first.
+    const hasShell = await page.locator(".tabs .tab").count();
+    if (hasShell === 0) {
+      await page.goto(URL);
+      await page.waitForSelector(".tabs .tab", { timeout: 15_000 });
+    }
     const localTab = page.locator(".tabs .tab").filter({ hasText: /^Local$/ }).first();
     if (await localTab.count() > 0) {
       await localTab.click();
