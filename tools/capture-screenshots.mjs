@@ -21,6 +21,62 @@ const OUT_DIR  = path.resolve("docs/screenshots");
 const VIEWPORT = { width: 1400, height: 900 };
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
+// Bounding box of the widget-card whose <h3> text is exactly ``name``.
+async function widgetCardBox(page, name) {
+  return page.evaluate((n) => {
+    for (const h of document.querySelectorAll(".widget-card h3")) {
+      if (h.textContent.trim() === n) {
+        const card = h.closest(".widget-card");
+        if (!card) return null;
+        card.scrollIntoView({ block: "start" });
+        const r = card.getBoundingClientRect();
+        return {
+          x: r.x + window.scrollX,
+          y: r.y + window.scrollY,
+          width: r.width,
+          height: r.height,
+        };
+      }
+    }
+    return null;
+  }, name);
+}
+
+// Generate a SHOTS entry that captures one widget card.
+function widget(seq, tab, id, name, caption) {
+  return {
+    file: `${String(seq).padStart(2, "0")}-widget-${id}.png`,
+    caption,
+    async open(page) {
+      await clickSubTab(page, tab);
+      await settle(page, 1500);
+      // Ensure the widget scrolls into view before capture.
+      await page.evaluate((n) => {
+        for (const h of document.querySelectorAll(".widget-card h3")) {
+          if (h.textContent.trim() === n) {
+            h.closest(".widget-card")?.scrollIntoView({ block: "start" });
+            break;
+          }
+        }
+      }, name);
+      await settle(page, 400);
+    },
+    async region(page) {
+      const box = await widgetCardBox(page, name);
+      if (!box) return null;
+      // Return only the client-visible slice; Playwright's clip needs
+      // viewport coords, so subtract scroll.
+      const scroll = await page.evaluate(() => ({ x: window.scrollX, y: window.scrollY }));
+      return {
+        x: Math.max(0, box.x - scroll.x),
+        y: Math.max(0, box.y - scroll.y),
+        width: box.width,
+        height: box.height,
+      };
+    },
+  };
+}
+
 if (!USERNAME || !PASSWORD) {
   console.error("Set EG4_USERNAME and EG4_PASSWORD env vars.");
   process.exit(1);
@@ -227,6 +283,47 @@ const SHOTS = [
       await settle(page, 2500);
     },
   },
+  // ------- per-widget close-ups (auto-generated) -------
+  widget(20, "Safety",    "aqi",              "Air quality",                 "Air Quality — US AQI + PM2.5/PM10/ozone/dust + 24h peak. Source: Open-Meteo."),
+  widget(21, "Safety",    "quakes",           "Earthquakes",                 "Earthquakes — recent felt quakes (M ≥ 2.5) within a configurable radius. Source: USGS."),
+  widget(22, "Safety",    "storms",           "Tropical storms",             "Tropical storms — active NHC cyclones, filtered to configured basins (default EP)."),
+  widget(23, "Safety",    "uv_heat",          "UV & heat stress",            "UV & heat — peak UV time + apparent-temperature danger window today and tomorrow."),
+  widget(24, "Outdoor",   "weather",          "Weather",                     "Weather — current conditions + 7-day forecast (Open-Meteo)."),
+  widget(25, "Outdoor",   "tides",            "Tide tables",                 "Tide tables — highs/lows from the tidetime.org scraper (no API key)."),
+  widget(26, "Outdoor",   "marine",           "Marine forecast",             "Marine — wave height, wind, sea temperature + 'best window' hint."),
+  widget(27, "Outdoor",   "sea_temp",         "Sea temperature",             "Sea surface temp — current + 7-day forecast + swim/fishing context."),
+  widget(28, "Outdoor",   "sun_moon",         "Sun & moon",                  "Sun & moon — sunrise/sunset/solar noon + moon phase (local math, no API)."),
+  widget(29, "Outdoor",   "sunset",           "Sunset countdown",            "Sunset countdown — live-ticking minutes to sunset with 'golden 20' highlight."),
+  widget(30, "Outdoor",   "fishing_window",   "Fishing windows",             "Fishing windows — best hours today/tomorrow from tide movement + dawn/dusk + sea state."),
+  widget(31, "Outdoor",   "whale_season",     "Whale watching",              "Whale watching season — Sea of Cortez fin/blue/gray whale indicator."),
+  widget(32, "Outdoor",   "meteor_showers",   "Meteor showers",              "Meteor showers — next shower peak with ZHR + hint. Announces N days before."),
+  widget(33, "Outdoor",   "bird_migration",   "Bird migration",              "Bird migration — species currently moving through the Baja Pacific Flyway."),
+  widget(34, "Travel",    "border",           "Border wait times",           "Border wait times — CBP data for US-Mexico crossings."),
+  widget(35, "Travel",    "costco_fuel",      "Fuel prices",                 "Fuel prices — real CA retail avg from EIA + live per-station Pemex from CRE + manual Costco."),
+  widget(36, "Travel",    "return_countdown", "Days until return",           "Return countdown — days to your next drive back north."),
+  widget(37, "Travel",    "currency",         "MXN/USD",                     "MXN/USD — daily rate from Frankfurter (ECB) with a 14-day trailing series."),
+  widget(38, "Travel",    "drive_time",       "Drive times",                 "Drive times — OSRM distance + duration between configured points."),
+  widget(39, "Travel",    "holidays",         "Mexican holidays",            "Mexican holidays — federal public holidays with next-holiday countdown."),
+  widget(40, "Travel",    "trip_planner",     "Trip planner",                "Trip planner — daily 'go-score' combining drive time + border wait + weather."),
+  widget(41, "Solar",     "consumption_yoy",  "Consumption YoY",             "Consumption YoY — today's load vs. same-day-last-year from EG4 history."),
+  widget(42, "Solar",     "forecast_accuracy","Forecast accuracy",           "Forecast accuracy — 30 days of forecast vs actual PV; tune peak_kw when biased."),
+  widget(43, "Solar",     "property_mode",    "Property mode",               "Property mode — Occupied / Vacant / Arriving date; other widgets adjust off this."),
+  widget(44, "Solar",     "solar_excess",     "Excess-energy planner",       "Excess-energy planner — today's expected surplus + suggested loads for midday."),
+  widget(45, "Solar",     "precool",          "Pre-cool advisor",            "Pre-cool advisor — window based on apparent-temperature peak and current SoC."),
+  widget(46, "Solar",     "when_to_run",      "When to run",                 "When to run — best contiguous window today/tomorrow per configured high-load appliance."),
+  widget(47, "Community", "baja_news",        "Baja news",                   "Baja news — configurable regional RSS/Atom outlets."),
+  widget(48, "Community", "baja_races",       "Baja races",                  "Baja races — SCORE International off-road schedule with ★ for SF-involved events."),
+  widget(49, "Community", "hoa_newsletter",   "HOA newsletter",              "HOA newsletter — latest El Dorado Ranch weekly PDF, auto-scraped."),
+  widget(50, "Community", "hoa",              "El Dorado Ranch — activities","El Dorado Ranch activities — auto-parsed weekly activities PDF."),
+  widget(51, "Community", "news",             "News",                        "News — configurable RSS/Atom feeds (defaults: NHC + USGS)."),
+  widget(52, "Community", "property_tax",     "Property tax (predial)",      "Property tax — San Felipe predial countdown with paid-this-year toggle."),
+  widget(53, "Community", "reservations",     "Reservations",                "Reservations — upcoming bookings from configured iCal URLs."),
+  widget(54, "Community", "spanish",          "Spanish practice",            "Spanish practice — daily phrase, speak button (via pi5 TTS), and dictation quiz."),
+  widget(55, "Lists",     "border_log",       "Border crossing log",         "Border crossing log — every crossing with direction, port, actual vs quoted wait, notes."),
+  widget(56, "Lists",     "contacts",         "Contacts",                    "Contacts — address book (name/phone/email/location) shared with the phone."),
+  widget(57, "Lists",     "quicklinks",       "Quick links",                 "Quick links — grouped bookmarks. Ships an 'Apps' group with smart_ac + HA."),
+  widget(58, "Lists",     "shopping_list",    "Shopping list (bring down)",  "Shopping list — items to buy in the US on your next border run."),
+  widget(59, "Lists",     "todo",             "Todo",                        "Todo — priority (1..5), optional due date, done flag, notes. Syncs to Sheets when enabled."),
 ];
 
 async function clickSubTab(page, name) {

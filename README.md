@@ -197,6 +197,92 @@ lives at `docs/screenshots/manifest.json`.
 
 **Mobile viewport** — same widgets, same data, 1-column grid on narrow screens (grid-column spans collapse under 700 px).
 
+### Every widget, close-up
+
+Each widget captured individually so you can see what data lives where. Grouped by tab.
+
+<details><summary><b>Safety</b> (4 widgets)</summary>
+
+| Widget | Screenshot |
+|---|---|
+| **Air quality** — US AQI + PM2.5/PM10/ozone/dust + 24h peak. Source: Open-Meteo. | <img src="docs/screenshots/20-widget-aqi.png" alt="Air quality" width="500" /> |
+| **Earthquakes** — recent felt quakes (M ≥ 2.5) within a configurable radius. Source: USGS. | <img src="docs/screenshots/21-widget-quakes.png" alt="Earthquakes" width="500" /> |
+| **Tropical storms** — active NHC cyclones, filtered to configured basins (default EP). | <img src="docs/screenshots/22-widget-storms.png" alt="Storms" width="500" /> |
+| **UV & heat** — peak UV time + apparent-temperature danger window today and tomorrow. | <img src="docs/screenshots/23-widget-uv_heat.png" alt="UV & heat" width="500" /> |
+
+</details>
+
+<details><summary><b>Outdoor</b> (10 widgets)</summary>
+
+| Widget | Screenshot |
+|---|---|
+| **Weather** — current + 7-day forecast (Open-Meteo). | <img src="docs/screenshots/24-widget-weather.png" width="500" /> |
+| **Tide tables** — highs/lows from tidetime.org scraper (no API key). | <img src="docs/screenshots/25-widget-tides.png" width="500" /> |
+| **Marine forecast** — wave height, wind, sea temperature + best-window hint. | <img src="docs/screenshots/26-widget-marine.png" width="500" /> |
+| **Sea temperature** — current + 7-day forecast + swim/fishing context. | <img src="docs/screenshots/27-widget-sea_temp.png" width="500" /> |
+| **Sun & moon** — sunrise/sunset/solar noon + moon phase, local math. | <img src="docs/screenshots/28-widget-sun_moon.png" width="500" /> |
+| **Sunset countdown** — live-ticking minutes to sunset, 'golden 20' highlight. | <img src="docs/screenshots/29-widget-sunset.png" width="500" /> |
+| **Fishing windows** — best hours from tide movement + dawn/dusk + sea state. | <img src="docs/screenshots/30-widget-fishing_window.png" width="500" /> |
+| **Whale watching** — Sea of Cortez fin/blue/gray whale season indicator. | <img src="docs/screenshots/31-widget-whale_season.png" width="500" /> |
+| **Meteor showers** — next shower peak + ZHR; announces days ahead. | <img src="docs/screenshots/32-widget-meteor_showers.png" width="500" /> |
+| **Bird migration** — species moving through the Baja Pacific Flyway this month. | <img src="docs/screenshots/33-widget-bird_migration.png" width="500" /> |
+
+</details>
+
+<details><summary><b>Travel</b> (7 widgets)</summary>
+
+| Widget | Screenshot |
+|---|---|
+| **Border wait times** — CBP data for US-Mexico crossings. | <img src="docs/screenshots/34-widget-border.png" width="500" /> |
+| **Fuel prices** — real CA retail avg (EIA) + live per-station Pemex (CRE gov feed) + manual Costco with staleness. | <img src="docs/screenshots/35-widget-costco_fuel.png" width="500" /> |
+| **Days until return** — countdown to your next drive back north. | <img src="docs/screenshots/36-widget-return_countdown.png" width="500" /> |
+| **MXN/USD** — daily rate from Frankfurter (ECB) with 14-day trailing series. | <img src="docs/screenshots/37-widget-currency.png" width="500" /> |
+| **Drive times** — OSRM distance + duration between configured points. | <img src="docs/screenshots/38-widget-drive_time.png" width="500" /> |
+| **Mexican holidays** — federal public holidays with countdown to the next. | <img src="docs/screenshots/39-widget-holidays.png" width="500" /> |
+| **Trip planner** — daily 'go-score' combining drive time + border wait + weather. | <img src="docs/screenshots/40-widget-trip_planner.png" width="500" /> |
+
+</details>
+
+<details><summary><b>Solar</b> (6 additional widgets — Solar Vitals, Climate History, Peak Load, AC vs PV, Sky Tonight above)</summary>
+
+| Widget | Screenshot |
+|---|---|
+| **Consumption YoY** — today's load vs same-day-last-year from EG4 history. | <img src="docs/screenshots/41-widget-consumption_yoy.png" width="500" /> |
+| **Forecast accuracy** — 30 days of forecast vs actual PV; tune `peak_kw` when biased. | <img src="docs/screenshots/42-widget-forecast_accuracy.png" width="500" /> |
+| **Property mode** — Occupied / Vacant / Arriving; other widgets adjust off this. | <img src="docs/screenshots/43-widget-property_mode.png" width="500" /> |
+| **Excess-energy planner** — expected surplus + suggested loads for midday. | <img src="docs/screenshots/44-widget-solar_excess.png" width="500" /> |
+| **Pre-cool advisor** — window based on apparent-temperature peak and SoC. | <img src="docs/screenshots/45-widget-precool.png" width="500" /> |
+| **When to run** — best contiguous window today/tomorrow per configured high-load appliance. | <img src="docs/screenshots/46-widget-when_to_run.png" width="500" /> |
+
+</details>
+
+<details><summary><b>Community</b> (8 widgets)</summary>
+
+| Widget | Screenshot |
+|---|---|
+| **Baja news** — configurable regional RSS/Atom outlets. | <img src="docs/screenshots/47-widget-baja_news.png" width="500" /> |
+| **Baja races** — SCORE International off-road schedule with ★ for SF-involved events. | <img src="docs/screenshots/48-widget-baja_races.png" width="500" /> |
+| **HOA newsletter** — latest El Dorado Ranch weekly PDF, auto-scraped. | <img src="docs/screenshots/49-widget-hoa_newsletter.png" width="500" /> |
+| **El Dorado Ranch activities** — auto-parsed weekly activities PDF. | <img src="docs/screenshots/50-widget-hoa.png" width="500" /> |
+| **News** — configurable RSS/Atom feeds (defaults: NHC + USGS). | <img src="docs/screenshots/51-widget-news.png" width="500" /> |
+| **Property tax (predial)** — San Felipe predial countdown with paid-this-year toggle. | <img src="docs/screenshots/52-widget-property_tax.png" width="500" /> |
+| **Reservations** — upcoming bookings from configured iCal URLs. | <img src="docs/screenshots/53-widget-reservations.png" width="500" /> |
+| **Spanish practice** — daily phrase, speak button (via pi5 TTS), and dictation quiz. | <img src="docs/screenshots/54-widget-spanish.png" width="500" /> |
+
+</details>
+
+<details><summary><b>Lists</b> (5 widgets)</summary>
+
+| Widget | Screenshot |
+|---|---|
+| **Border crossing log** — every crossing (direction, port, actual vs quoted wait, notes). | <img src="docs/screenshots/55-widget-border_log.png" width="500" /> |
+| **Contacts** — address book (name/phone/email/location) shared with the phone. | <img src="docs/screenshots/56-widget-contacts.png" width="500" /> |
+| **Quick links** — grouped bookmarks. Ships an 'Apps' group with smart_ac + HA. | <img src="docs/screenshots/57-widget-quicklinks.png" width="500" /> |
+| **Shopping list** — items to buy in the US on your next border run. | <img src="docs/screenshots/58-widget-shopping_list.png" width="500" /> |
+| **Todo** — priority (1..5), optional due date, done flag, notes. Syncs to Sheets when enabled. | <img src="docs/screenshots/59-widget-todo.png" width="500" /> |
+
+</details>
+
 ---
 
 ### Panel-by-panel walkthrough (original, pre-July 2026)
