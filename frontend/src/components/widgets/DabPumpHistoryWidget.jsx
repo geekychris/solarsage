@@ -1,14 +1,16 @@
 import React, { useState } from "react";
 
-function BarChart({ data, keyLabel, colour, unit = "gal", pad = 24 }) {
+function BarChart({ data, keyLabel, colour, unit = "gal" }) {
   if (!data || data.length === 0) {
     return <div className="muted" style={{ fontSize: 12 }}>No data.</div>;
   }
   const w = 300;
   const h = 90;
+  const pad = 24;
   const inner = h - pad;
   const barW = (w - 8) / data.length;
-  const maxVal = Math.max(1, ...data.map((d) => d.gallons || 0));
+  const realVals = data.map((d) => d.gallons).filter((v) => v != null);
+  const maxVal = Math.max(1, ...realVals, 0);
   const yScale = (v) => inner - (v / maxVal) * (inner - 4);
   const gridVals = [maxVal, maxVal * 0.5];
   return (
@@ -34,8 +36,21 @@ function BarChart({ data, keyLabel, colour, unit = "gal", pad = 24 }) {
           </g>
         ))}
         {data.map((d, i) => {
-          const val = d.gallons || 0;
+          const val = d.gallons;
           const x = i * barW + 2;
+          const isFuture = d.future === true || val == null;
+          if (isFuture) {
+            // Faint placeholder rect so the chart doesn't lose its shape.
+            return (
+              <rect
+                key={i}
+                x={x} y={inner - 3}
+                width={Math.max(1, barW - 2)}
+                height={3}
+                fill="currentColor" fillOpacity="0.08"
+              />
+            );
+          }
           const y = yScale(val);
           const barH = inner - y;
           return (
@@ -52,7 +67,6 @@ function BarChart({ data, keyLabel, colour, unit = "gal", pad = 24 }) {
           );
         })}
         {data.map((d, i) => {
-          // Sparse labels: every 4th for hourly, all for daily.
           if (data.length > 10 && i % 4 !== 0) return null;
           const x = i * barW + 2 + Math.max(0, barW - 2) / 2;
           return (
@@ -73,14 +87,23 @@ function BarChart({ data, keyLabel, colour, unit = "gal", pad = 24 }) {
 
 export default function DabPumpHistoryWidget({ data }) {
   const [view, setView] = useState("hour");
+  const [dayOffset, setDayOffset] = useState(0);
   if (!data) return <div className="muted">Loading…</div>;
   if (data.note) return <div className="muted">{data.note}</div>;
 
-  const series = view === "hour" ? data.by_hour : data.by_day;
+  const daysHourly = data.days_hourly || [];
+  const maxOffset = Math.max(0, daysHourly.length - 1);
+  const clampedOffset = Math.min(dayOffset, maxOffset);
+  const selectedDay = daysHourly[clampedOffset] || null;
+
+  const hourlySeries = selectedDay?.by_hour || [];
+  const daySeries = data.by_day || [];
+  const series = view === "hour" ? hourlySeries : daySeries;
   const keyLabel = view === "hour" ? "hour" : "label";
   const colour = view === "hour" ? "#6cd1ff" : "#6fdc8c";
-  const total = view === "hour" ? data.total_24h : data.total_7d;
-  const peak = view === "hour" ? data.peak_hour : data.peak_day;
+
+  const hourlyPeak = selectedDay?.peak || null;
+  const hourlyTotal = selectedDay?.total ?? 0;
 
   return (
     <div className="dab-hist">
@@ -89,35 +112,69 @@ export default function DabPumpHistoryWidget({ data }) {
           <button
             className={view === "hour" ? "active" : ""}
             onClick={() => setView("hour")}
-          >24h</button>
+          >1d</button>
           <button
             className={view === "day" ? "active" : ""}
             onClick={() => setView("day")}
           >7d</button>
         </div>
-        <div className="dab-hist-summary">
-          <div>
-            <span className="muted" style={{ fontSize: 11 }}>
-              {view === "hour" ? "24h total" : "7d total"}
-            </span>
-            <div className="dab-hist-big">{total?.toFixed(1)} gal</div>
+        {view === "hour" && daysHourly.length > 0 && (
+          <div className="dab-hist-daynav">
+            <button
+              type="button"
+              disabled={clampedOffset >= maxOffset}
+              onClick={() => setDayOffset(clampedOffset + 1)}
+              title="Previous day"
+            >‹</button>
+            <div className="dab-hist-day">
+              <div className="dab-hist-day-label">{selectedDay?.label}</div>
+              <div className="muted" style={{ fontSize: 10 }}>{selectedDay?.date}</div>
+            </div>
+            <button
+              type="button"
+              disabled={clampedOffset <= 0}
+              onClick={() => setDayOffset(clampedOffset - 1)}
+              title="Next day"
+            >›</button>
           </div>
-          {view === "day" && (
-            <div>
-              <span className="muted" style={{ fontSize: 11 }}>avg / day</span>
-              <div className="dab-hist-big">{data.avg_daily?.toFixed(1)} gal</div>
-            </div>
-          )}
-          {peak && peak.gallons > 0 && (
-            <div>
-              <span className="muted" style={{ fontSize: 11 }}>
-                peak {view === "hour" ? "hour" : "day"}
-              </span>
-              <div className="dab-hist-big">
-                {peak.gallons.toFixed(1)}
-                <span className="dab-hist-sub"> · {peak[keyLabel]}</span>
+        )}
+        <div className="dab-hist-summary">
+          {view === "hour" ? (
+            <>
+              <div>
+                <span className="muted" style={{ fontSize: 11 }}>Total</span>
+                <div className="dab-hist-big">{hourlyTotal.toFixed(1)} gal</div>
               </div>
-            </div>
+              {hourlyPeak && hourlyPeak.gallons > 0 && (
+                <div>
+                  <span className="muted" style={{ fontSize: 11 }}>Peak hour</span>
+                  <div className="dab-hist-big">
+                    {hourlyPeak.gallons.toFixed(1)}
+                    <span className="dab-hist-sub"> · {hourlyPeak.hour}</span>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div>
+                <span className="muted" style={{ fontSize: 11 }}>7d total</span>
+                <div className="dab-hist-big">{data.total_7d?.toFixed(1)} gal</div>
+              </div>
+              <div>
+                <span className="muted" style={{ fontSize: 11 }}>avg / day</span>
+                <div className="dab-hist-big">{data.avg_daily?.toFixed(1)} gal</div>
+              </div>
+              {data.peak_day && data.peak_day.gallons > 0 && (
+                <div>
+                  <span className="muted" style={{ fontSize: 11 }}>peak day</span>
+                  <div className="dab-hist-big">
+                    {data.peak_day.gallons.toFixed(1)}
+                    <span className="dab-hist-sub"> · {data.peak_day.label}</span>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -128,10 +185,11 @@ export default function DabPumpHistoryWidget({ data }) {
       />
       {data.collected_hours != null && data.collected_hours < 168 && (
         <div className="muted" style={{ fontSize: 10 }}>
-          Only {data.collected_hours < 24
+          Home Assistant has only {data.collected_hours < 24
             ? `${Math.round(data.collected_hours)}h`
             : `${Math.round(data.collected_hours / 24)}d`}
-          {" "}of history in HA so far — chart fills in as more data arrives.
+          {" "}of history for this sensor so far — earlier days will look empty
+          until more data accumulates.
         </div>
       )}
     </div>

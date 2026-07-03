@@ -1973,6 +1973,20 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
 .dab-hist-big { font-size: 16px; font-weight: 700; }
 .dab-hist-sub { font-size: 11px; font-weight: 400; color: var(--muted, #8a94a3); }
 .dab-hist-chart { width: 100%; }
+.dab-hist-daynav {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px; padding: 3px 6px;
+}
+.dab-hist-daynav button {
+  padding: 2px 8px; font-size: 14px; line-height: 1;
+  border: none; background: transparent; color: inherit; cursor: pointer;
+  border-radius: 4px;
+}
+.dab-hist-daynav button:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
+.dab-hist-daynav button:disabled { opacity: 0.3; cursor: default; }
+.dab-hist-day { text-align: center; min-width: 90px; }
+.dab-hist-day-label { font-size: 12px; font-weight: 700; }
 
 /* Meteor showers */
 .meteor-hero {

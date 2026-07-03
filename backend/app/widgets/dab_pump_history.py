@@ -184,23 +184,52 @@ class DabPumpHistoryWidget(Widget):
         collected_since = samples[0][0].astimezone().isoformat()
         collected_hours = (now - samples[0][0]).total_seconds() / 3600
 
-        # 24h × hourly. Buckets bounded to top-of-hour so the labels
-        # line up cleanly with wall-clock (in the user's local zone).
+        # For the 1-day (24h) view we want to paginate day-by-day, so
+        # pre-bucket the last 7 calendar days into 24 hourly slots each.
+        # ``days_hourly[0]`` is today, ``days_hourly[6]`` is 6 days ago.
         local_now = now.astimezone()
-        hour_top  = local_now.replace(minute=0, second=0, microsecond=0)
-        hourly_boundaries = [
-            (hour_top - timedelta(hours=(24 - i))).astimezone(timezone.utc)
-            for i in range(25)
-        ]
-        hourly_deltas = _bucket_deltas(samples, hourly_boundaries)
-        by_hour = [
-            {
-                "start": hourly_boundaries[i].astimezone().isoformat(),
-                "hour":  (hourly_boundaries[i].astimezone()).strftime("%-I%p").lower(),
-                "gallons": hourly_deltas[i],
-            }
-            for i in range(24)
-        ]
+        day_start_today = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        days_hourly: list[dict[str, Any]] = []
+        for offset in range(7):
+            day_start_local = day_start_today - timedelta(days=offset)
+            day_end_local   = day_start_local + timedelta(days=1)
+            # Cap "today" at now so we don't project future zeros forward.
+            capped_end = min(day_end_local, local_now)
+            hourly_bounds = [
+                (day_start_local + timedelta(hours=h)).astimezone(timezone.utc)
+                for h in range(25)
+            ]
+            deltas = _bucket_deltas(samples, hourly_bounds)
+            buckets = []
+            for h in range(24):
+                t_local = day_start_local + timedelta(hours=h)
+                # For today, past-now hours are marked None so the chart
+                # can render them as "not yet" instead of a 0-value bar.
+                future = (offset == 0 and t_local > local_now)
+                buckets.append({
+                    "hour":    t_local.strftime("%-I%p").lower(),
+                    "gallons": None if future else deltas[h],
+                    "future":  future,
+                })
+            days_hourly.append({
+                "date":    day_start_local.date().isoformat(),
+                "label":   (
+                    "Today" if offset == 0
+                    else "Yesterday" if offset == 1
+                    else day_start_local.strftime("%a %b %-d")
+                ),
+                "total":   round(sum(d for d in deltas[:len(buckets)] if d is not None), 1),
+                "peak":    max(
+                    (b for b in buckets if b["gallons"] is not None),
+                    key=lambda b: b["gallons"] or 0,
+                    default=None,
+                ),
+                "by_hour": buckets,
+            })
+
+        # Keep the flat 24h view for backwards-compat / summary tiles.
+        by_hour = days_hourly[0]["by_hour"]
+        hourly_deltas = [b["gallons"] or 0 for b in by_hour]
 
         # 7d × daily. Buckets bounded to local midnight.
         day_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -220,6 +249,11 @@ class DabPumpHistoryWidget(Widget):
             for i in range(7)
         ]
 
+        # Ignore future/None buckets for the "peak hour" calculation.
+        peak_hour = None
+        real_hours = [b for b in by_hour if b["gallons"] is not None]
+        if real_hours:
+            peak_hour = max(real_hours, key=lambda x: x["gallons"])
         return {
             "fetched_at":       now.isoformat(),
             "entity_id":        eid,
@@ -228,8 +262,9 @@ class DabPumpHistoryWidget(Widget):
             "total_24h":        round(sum(hourly_deltas), 1),
             "total_7d":         round(sum(daily_deltas),  1),
             "avg_daily":        round(sum(daily_deltas) / 7, 1),
-            "peak_hour":        max(by_hour, key=lambda x: x["gallons"]) if by_hour else None,
+            "peak_hour":        peak_hour,
             "peak_day":         max(by_day,  key=lambda x: x["gallons"]) if by_day else None,
-            "by_hour":          by_hour,
+            "by_hour":          by_hour,        # today only, for compat
             "by_day":           by_day,
+            "days_hourly":      days_hourly,    # 7 days, paginated view
         }
