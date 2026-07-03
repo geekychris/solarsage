@@ -47,6 +47,8 @@ import ForecastAccuracyWidget from "./widgets/ForecastAccuracyWidget.jsx";
 import SkyTonightWidget from "./widgets/SkyTonightWidget.jsx";
 import MeteorShowersWidget from "./widgets/MeteorShowersWidget.jsx";
 import BirdMigrationWidget from "./widgets/BirdMigrationWidget.jsx";
+import DabPumpWidget from "./widgets/DabPumpWidget.jsx";
+import DabPumpControlWidget from "./widgets/DabPumpControlWidget.jsx";
 import WidgetSettings from "./WidgetSettings.jsx";
 
 const RENDERERS = {
@@ -95,6 +97,8 @@ const RENDERERS = {
   sky_tonight: SkyTonightWidget,
   meteor_showers: MeteorShowersWidget,
   bird_migration: BirdMigrationWidget,
+  dab_pump: DabPumpWidget,
+  dab_pump_control: DabPumpControlWidget,
 };
 
 // Stable order for subtabs when more than one is present.

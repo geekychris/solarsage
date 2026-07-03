@@ -1873,6 +1873,75 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
 .sky-dir { font-size: 10px; letter-spacing: 0.04em; margin-left: 2px; }
 .sky-az  { font-size: 10px; }
 
+/* DAB water-pump — stats */
+.dab-pump { display: flex; flex-direction: column; gap: 10px; }
+.dab-hero {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 8px 4px;
+}
+.dab-status { font-size: 18px; font-weight: 700; margin-top: 2px; }
+.dab-running  { color: #6fdc8c; }
+.dab-standby  { color: var(--muted, #8a94a3); }
+.dab-fault    { color: #ef6f6c; font-size: 12px; margin-top: 2px; }
+.dab-big { font-size: 24px; font-weight: 800; line-height: 1.1; }
+.dab-unit { font-size: 11px; font-weight: 400; color: var(--muted, #8a94a3); margin-left: 2px; }
+.dab-mode-row { text-align: center; }
+.dab-mode {
+  display: inline-block; padding: 4px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 700;
+}
+.dab-mode-ps    { background: rgba(108,209,255,0.20); color: #6cd1ff; }
+.dab-mode-sleep { background: rgba(162,155,254,0.20); color: #a29bfe; }
+.dab-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+}
+.dab-cell {
+  padding: 6px 8px; border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.dab-cell .muted { font-size: 10px; }
+.dab-cell-val { font-size: 15px; font-weight: 700; }
+.dab-totals { width: 100%; font-size: 12px; border-collapse: collapse; margin-top: 4px; }
+.dab-totals th, .dab-totals td { text-align: left; padding: 2px 6px; }
+.dab-totals th { color: var(--muted, #8a94a3); font-weight: 500; width: 22%; }
+
+/* DAB water-pump — controls */
+.dab-control { display: flex; flex-direction: column; gap: 12px; }
+.dab-mode-buttons {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.dab-mode-btn {
+  padding: 14px 8px; border-radius: 10px; text-align: center;
+  border: 2px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: inherit; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.dab-mode-btn:hover:not(:disabled) { background: rgba(255,255,255,0.06); }
+.dab-mode-btn:disabled { opacity: 0.5; cursor: wait; }
+.dab-mode-icon { font-size: 28px; }
+.dab-mode-name { font-size: 14px; font-weight: 700; margin-top: 4px; }
+.dab-mode-sub  { font-size: 11px; color: var(--muted, #8a94a3); margin-top: 2px; }
+.dab-mode-btn.dab-ps.active {
+  border-color: #6cd1ff; background: rgba(108,209,255,0.15);
+}
+.dab-mode-btn.dab-sleep.active {
+  border-color: #a29bfe; background: rgba(162,155,254,0.15);
+}
+.dab-control-detail { display: flex; flex-direction: column; gap: 8px; }
+.dab-selector .dab-chip-row {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px;
+}
+.dab-chip {
+  padding: 4px 10px; border-radius: 999px; font-size: 12px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: transparent; color: inherit; cursor: pointer;
+}
+.dab-chip.active { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); }
+.dab-chip:disabled { opacity: 0.5; cursor: wait; }
+.dab-chip-warn { color: #ef6f6c; border-color: rgba(239,111,108,0.4); }
+
 /* Meteor showers */
 .meteor-hero {
   display: flex; justify-content: space-between; align-items: center;

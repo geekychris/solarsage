@@ -71,6 +71,8 @@ from .widgets.forecast_accuracy import ForecastAccuracyWidget
 from .widgets.sky_tonight import SkyTonightWidget
 from .widgets.meteor_showers import MeteorShowersWidget
 from .widgets.bird_migration import BirdMigrationWidget
+from .widgets.dab_pump import DabPumpWidget
+from .widgets.dab_pump_control import DabPumpControlWidget
 from .widgets.property_mode import PropertyModeWidget
 from .widgets.news import NewsWidget
 from .widgets.reservations import ReservationsWidget
@@ -193,6 +195,8 @@ def _register_builtin_widgets() -> None:
         SkyTonightWidget(),
         MeteorShowersWidget(),
         BirdMigrationWidget(),
+        DabPumpWidget(),
+        DabPumpControlWidget(),
         PropertyTaxWidget(),
         ContactsWidget(),
         TodoWidget(),
@@ -3177,6 +3181,107 @@ async def smart_ac_override(
         "duration_minutes": duration,
         "override_until": until.isoformat() if until else None,
     }
+
+
+# --- DAB water-pump control ------------------------------------------------
+
+# Maps the widget's short ``action`` verb → (HA service, payload) tuples.
+# Payload uses ``{entity_id}`` as a placeholder; the endpoint substitutes
+# the configured entity id per action so each install can retarget in
+# Settings if the entity slugs differ.
+_DAB_ACTIONS: dict[str, tuple[str, str, str, str]] = {
+    # action                domain         service          entity-key                    value
+    "sleep_on":            ("switch",      "turn_on",       "sleep_switch_eid",           ""),
+    "sleep_off":           ("switch",      "turn_off",      "sleep_switch_eid",           ""),
+    "power_shower_start":  ("select",      "select_option", "power_shower_select_eid",    "Start"),
+    "power_shower_stop":   ("select",      "select_option", "power_shower_select_eid",    "Stop"),
+    "pump_enable":         ("select",      "select_option", "pump_disable_select_eid",    "Enable"),
+    "pump_disable":        ("select",      "select_option", "pump_disable_select_eid",    "Disable"),
+    "set_boost":           ("select",      "select_option", "power_shower_boost_eid",     "__value__"),
+    "set_reduction":       ("select",      "select_option", "sleep_reduction_eid",        "__value__"),
+}
+
+
+@app.post(
+    "/api/widgets/dab_pump/control",
+    tags=["widgets"],
+    summary="Trigger a DAB e.syMINI pump action via Home Assistant",
+)
+async def dab_pump_control(
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Body: ``{"action": "power_shower_start"}`` — or with a value for
+    the two ``set_*`` actions, e.g. ``{"action":"set_boost","value":"+ 40"}``.
+
+    Reads the target HA entity id from the ``dab_pump_control`` widget's
+    stored config so it survives across installs with different pump
+    entity slugs.
+    """
+    action = str(body.get("action") or "").strip().lower()
+    if action not in _DAB_ACTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"action must be one of {sorted(_DAB_ACTIONS)}",
+        )
+
+    ha_url = os.getenv("HA_URL", "").rstrip("/")
+    ha_token = os.getenv("HA_TOKEN")
+    if not ha_url or not ha_token:
+        raise HTTPException(
+            status_code=500, detail="HA_URL + HA_TOKEN not set in backend/.env",
+        )
+
+    domain, service, config_key, canned_value = _DAB_ACTIONS[action]
+
+    w = widget_registry.get("dab_pump_control")
+    if w is None:
+        raise HTTPException(status_code=500, detail="dab_pump_control not registered")
+    config = await widget_store.get_config(w.id) or {}
+    merged = {**(w.default_config or {}), **config}
+    entity_id = (merged.get(config_key) or "").strip()
+    if not entity_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{config_key} not configured for dab_pump_control",
+        )
+
+    payload: dict[str, Any] = {"entity_id": entity_id}
+    if canned_value == "__value__":
+        supplied = str(body.get("value") or "").strip()
+        if not supplied:
+            raise HTTPException(
+                status_code=400,
+                detail="action requires a 'value' (e.g. '+ 40', '- 30')",
+            )
+        payload["option"] = supplied
+    elif canned_value:
+        payload["option"] = canned_value
+
+    headers = {
+        "Authorization": f"Bearer {ha_token}",
+        "Content-Type": "application/json",
+    }
+    async with aiohttp.ClientSession() as http:
+        async with http.post(
+            f"{ha_url}/api/services/{domain}/{service}",
+            json=payload, headers=headers, timeout=10,
+        ) as r:
+            if r.status >= 400:
+                text = (await r.text())[:200]
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"HA {domain}/{service} failed: {r.status} {text}",
+                )
+
+    # Force a control-widget refresh so the toggle state flips right
+    # away instead of waiting for the next scheduled tick.
+    try:
+        await widget_refresh_now(w, widget_store, sheets, _SUBS_BUNDLE, mqtt)
+    except Exception:  # noqa: BLE001
+        pass
+
+    return {"ok": True, "action": action, "entity_id": entity_id}
 
 
 @app.post(

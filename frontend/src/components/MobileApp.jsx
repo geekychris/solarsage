@@ -37,6 +37,8 @@ import CostcoFuelWidget from "./widgets/CostcoFuelWidget.jsx";
 import ConsumptionYoYWidget from "./widgets/ConsumptionYoYWidget.jsx";
 import TodoWidget from "./widgets/TodoWidget.jsx";
 import SubscriptionsWidget from "./widgets/SubscriptionsWidget.jsx";
+import DabPumpWidget from "./widgets/DabPumpWidget.jsx";
+import DabPumpControlWidget from "./widgets/DabPumpControlWidget.jsx";
 
 const RENDERERS = {
   tides: TideWidget, border: BorderWidget, hoa: HoaWidget,
@@ -55,6 +57,7 @@ const RENDERERS = {
   shopping_list: ShoppingListWidget, border_log: BorderLogWidget,
   spanish: SpanishWidget, costco_fuel: CostcoFuelWidget,
   consumption_yoy: ConsumptionYoYWidget, todo: TodoWidget,
+  dab_pump: DabPumpWidget, dab_pump_control: DabPumpControlWidget,
 };
 
 // Same tab ordering as desktop

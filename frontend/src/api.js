@@ -315,6 +315,12 @@ export const api = {
       method: "POST",
       body: { room, state, duration_minutes },
     }),
+  // DAB water-pump control (Sleep / Power-Shower / enable-disable)
+  dabPumpControl: ({ action, value }) =>
+    request("/api/widgets/dab_pump/control", {
+      method: "POST",
+      body: value == null ? { action } : { action, value },
+    }),
   // HA Integrations
   getHaIntegrations: () => request("/api/ha/integrations"),
   putHaIntegration: (widget_id, body) =>
