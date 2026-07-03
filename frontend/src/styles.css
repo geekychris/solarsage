@@ -348,6 +348,10 @@ select, input {
   color: var(--text);
   border-bottom-color: var(--accent-2);
 }
+/* Sub-tab strip nested inside a top-level tab. Slightly quieter
+   than the primary tabs. */
+.tabs-sub { margin-top: -4px; margin-bottom: 12px; }
+.tabs-sub .tab { padding: 6px 10px; font-size: 12px; }
 
 /* Tabbed dashboard sections: hidden unless the matching tab is active.
    All panels stay mounted so their pollers + state survive tab switches. */

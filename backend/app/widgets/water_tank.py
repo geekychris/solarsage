@@ -55,8 +55,8 @@ class WaterTankWidget(Widget):
         "configurable low-water announcements."
     )
     refresh_seconds = 5 * 60
-    default_tab = "Local"
-    default_position = 15
+    default_tab = "House"
+    default_position = 12
 
     data_schema = {
         "type": "object",

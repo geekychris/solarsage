@@ -32,7 +32,8 @@ export default function Dashboard({ session, onLoggedOut, onSignIn, onSwitchMobi
   const [tzOffsetMinutes, setTzOffsetMinutes] = useState(null);
   // Single-site for now — multi-site UI removed pending real implementation
   const siteId = "site-1";
-  const [activeTab, setActiveTab] = useState(session?.guest ? "local" : "now");
+  const [topTab, setTopTab] = useState(session?.guest ? "home" : "eg4");
+  const [eg4Sub, setEg4Sub] = useState("now");
 
   useEffect(() => {
     let cancelled = false;
@@ -182,89 +183,109 @@ export default function Dashboard({ session, onLoggedOut, onSignIn, onSwitchMobi
 
           <div className="tabs no-print">
             {[
-              ["now", "Now"],
-              ["today", "Today"],
-              ["battery", "Battery"],
-              ["history", "History"],
-              ["health", "Health & Alerts"],
-              ["all", "All"],
-              ["local", "Local"],
+              ["eg4",  "EG4"],
+              ["home", "Home"],
             ].map(([id, label]) => (
               <div
                 key={id}
-                className={`tab ${activeTab === id ? "active" : ""}`}
-                onClick={() => setActiveTab(id)}
+                className={`tab ${topTab === id ? "active" : ""}`}
+                onClick={() => setTopTab(id)}
               >
                 {label}
               </div>
             ))}
           </div>
 
-          <div className={`tab-section ${activeTab === "now" || activeTab === "all" ? "active" : ""}`}>
-            {session?.guest && (
-              <div className="panel" style={{ padding: 16, textAlign: "center" }}>
-                <p style={{ margin: "8px 0" }}>
-                  Sign in to see live EG4 data (power flow, per-string PV, live tiles, weather panel, raw data).
-                </p>
-                <button className="primary" onClick={onSignIn}>Sign in</button>
-                <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                  Widgets in the Local tab work without signing in.
-                </div>
+          {topTab === "eg4" && (
+            <>
+              <div className="tabs tabs-sub no-print">
+                {[
+                  ["now",     "Now"],
+                  ["today",   "Today"],
+                  ["battery", "Battery"],
+                  ["history", "History"],
+                  ["health",  "Health & Alerts"],
+                  ["all",     "All"],
+                ].map(([id, label]) => (
+                  <div
+                    key={id}
+                    className={`tab ${eg4Sub === id ? "active" : ""}`}
+                    onClick={() => setEg4Sub(id)}
+                  >
+                    {label}
+                  </div>
+                ))}
               </div>
-            )}
-            {selected && <PowerFlow snapshot={snapshot} />}
-            {selectedInv && (
-              <div className="panel">
-                <h3>{selectedInv.plantName || selectedInv.serialNum}</h3>
-                <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
-                  SN {selectedInv.serialNum} · FW {selectedInv.fwVersion || "—"} · {selectedInv.phase || ""}
-                </div>
-                <LiveTiles snapshot={snapshot} />
+
+              <div className={`tab-section ${eg4Sub === "now" || eg4Sub === "all" ? "active" : ""}`}>
+                {session?.guest && (
+                  <div className="panel" style={{ padding: 16, textAlign: "center" }}>
+                    <p style={{ margin: "8px 0" }}>
+                      Sign in to see live EG4 data (power flow, per-string PV, live tiles, weather panel, raw data).
+                    </p>
+                    <button className="primary" onClick={onSignIn}>Sign in</button>
+                    <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                      Widgets in the Home tab work without signing in.
+                    </div>
+                  </div>
+                )}
+                {selected && <PowerFlow snapshot={snapshot} />}
+                {selectedInv && (
+                  <div className="panel">
+                    <h3>{selectedInv.plantName || selectedInv.serialNum}</h3>
+                    <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                      SN {selectedInv.serialNum} · FW {selectedInv.fwVersion || "—"} · {selectedInv.phase || ""}
+                    </div>
+                    <LiveTiles snapshot={snapshot} />
+                  </div>
+                )}
+                {selected && <WeatherPanel key={`wp-${selected}-${settingsBump}`} serial={selected} />}
+                {snapshot && (
+                  <div className="panel">
+                    <h3>Raw data</h3>
+                    <RawDataTable snapshot={snapshot} />
+                  </div>
+                )}
               </div>
-            )}
-            {selected && <WeatherPanel key={`wp-${selected}-${settingsBump}`} serial={selected} />}
-            {snapshot && (
-              <div className="panel">
-                <h3>Raw data</h3>
-                <RawDataTable snapshot={snapshot} />
+
+              <div className={`tab-section ${eg4Sub === "today" || eg4Sub === "all" ? "active" : ""}`}>
+                {selected && <TodayChart key={`tc-${selected}-${settingsBump}`} serial={selected} />}
+                {selected && <ExcessChart key={`ec-${selected}-${settingsBump}`} serial={selected} />}
+                {selected && siteId && (
+                  <SchedulerPanel key={`sch-${selected}-${siteId}`} serial={selected} siteId={siteId} />
+                )}
               </div>
-            )}
-          </div>
 
-          <div className={`tab-section ${activeTab === "today" || activeTab === "all" ? "active" : ""}`}>
-            {selected && <TodayChart key={`tc-${selected}-${settingsBump}`} serial={selected} />}
-            {selected && <ExcessChart key={`ec-${selected}-${settingsBump}`} serial={selected} />}
-            {selected && siteId && (
-              <SchedulerPanel key={`sch-${selected}-${siteId}`} serial={selected} siteId={siteId} />
-            )}
-          </div>
+              <div className={`tab-section ${eg4Sub === "battery" || eg4Sub === "all" ? "active" : ""}`}>
+                {selected && <BatteryForecast key={`bf-${selected}-${settingsBump}`} serial={selected} />}
+                {selected && <BatteryCycle key={`bc-${selected}-${settingsBump}`} serial={selected} />}
+              </div>
 
-          <div className={`tab-section ${activeTab === "battery" || activeTab === "all" ? "active" : ""}`}>
-            {selected && <BatteryForecast key={`bf-${selected}-${settingsBump}`} serial={selected} />}
-            {selected && <BatteryCycle key={`bc-${selected}-${settingsBump}`} serial={selected} />}
-          </div>
+              <div className={`tab-section ${eg4Sub === "history" || eg4Sub === "all" ? "active" : ""}`}>
+                {selected && (
+                  <RangeChart
+                    key={`rc-${selected}-${settingsBump}`}
+                    serial={selected}
+                    tzOffsetMinutes={tzOffsetMinutes}
+                  />
+                )}
+                {selected && <Heatmap key={`hm-${selected}-${settingsBump}`} serial={selected} />}
+                {selected && <HistoryChart serial={selected} />}
+              </div>
 
-          <div className={`tab-section ${activeTab === "history" || activeTab === "all" ? "active" : ""}`}>
-            {selected && (
-              <RangeChart
-                key={`rc-${selected}-${settingsBump}`}
-                serial={selected}
-                tzOffsetMinutes={tzOffsetMinutes}
-              />
-            )}
-            {selected && <Heatmap key={`hm-${selected}-${settingsBump}`} serial={selected} />}
-            {selected && <HistoryChart serial={selected} />}
-          </div>
+              <div className={`tab-section ${eg4Sub === "health" || eg4Sub === "all" ? "active" : ""}`}>
+                {selected && <HealthPanel key={`hp-${selected}-${settingsBump}`} serial={selected} />}
+                {siteId && <AlertsPanel key={`al-${siteId}`} siteId={siteId} />}
+                {siteId && <AppliancesPanel key={`ap-${siteId}`} siteId={siteId} />}
+              </div>
+            </>
+          )}
 
-          <div className={`tab-section ${activeTab === "health" || activeTab === "all" ? "active" : ""}`}>
-            {selected && <HealthPanel key={`hp-${selected}-${settingsBump}`} serial={selected} />}
-            {siteId && <AlertsPanel key={`al-${siteId}`} siteId={siteId} />}
-            {siteId && <AppliancesPanel key={`ap-${siteId}`} siteId={siteId} />}
-          </div>
-
-          <div className={`tab-section ${activeTab === "local" || activeTab === "all" ? "active" : ""}`}>
-            <LocalTab tzOffsetMinutes={tzOffsetMinutes} />
-          </div>
+          {topTab === "home" && (
+            <div className="tab-section active">
+              <LocalTab tzOffsetMinutes={tzOffsetMinutes} />
+            </div>
+          )}
         </div>
       </div>
       <Settings

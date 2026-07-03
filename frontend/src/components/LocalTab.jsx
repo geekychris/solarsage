@@ -101,9 +101,11 @@ const RENDERERS = {
   dab_pump_control: DabPumpControlWidget,
 };
 
-// Stable order for subtabs when more than one is present.
+// Stable order for subtabs when more than one is present. "Local" is
+// the fallback bucket for any widget that hasn't set default_tab —
+// kept last so it doesn't clutter the primary lineup.
 const TAB_ORDER = [
-  "Today", "Safety", "Outdoor", "Travel", "Solar", "House", "Community", "Lists", "Local",
+  "Today", "House", "Solar", "Outdoor", "Travel", "Safety", "Community", "Lists", "Local",
 ];
 
 function tabSortKey(t) {
