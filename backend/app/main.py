@@ -417,6 +417,22 @@ async def require_read(
     return s
 
 
+async def read_or_public(
+    authorization: str | None = Header(default=None),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    api_key: str | None = Query(default=None, alias="api_key"),
+) -> Session | None:
+    """Like ``require_read`` but silently returns ``None`` for
+    unauthenticated readers instead of raising 401. Use for
+    non-sensitive read endpoints the widget dashboard needs when
+    the user hasn't signed into EG4 yet."""
+    try:
+        s, _ = await _resolve_auth(authorization, x_api_key, api_key)
+        return s
+    except HTTPException:
+        return None
+
+
 def _inverter_to_dict(inv: Any) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for k, v in inv.__dict__.items():
@@ -718,7 +734,7 @@ def _location_from(settings: dict) -> LocationConfig:
 
 
 @app.get("/api/settings")
-async def get_settings(session: Session = Depends(require_session)):
+async def get_settings(session: Session = Depends(read_or_public)):
     s = await _load_settings()
     s["tz_offset_minutes"] = _tz_offset_minutes(str(s.get("tz", "America/Tijuana")))
     # Fall back to env vars for the integration secrets so the UI shows
@@ -1943,7 +1959,7 @@ async def put_widget_layout(
 
 
 @app.get("/api/widgets", tags=["widgets"], summary="List all widgets")
-async def list_widgets(_: Session | None = Depends(require_read)):
+async def list_widgets(_: Session | None = Depends(read_or_public)):
     """Index of every registered widget plus its current cached payload.
 
     Each entry has: ``id``, ``meta`` (description, schemas, refresh policy),
@@ -1958,7 +1974,7 @@ async def list_widgets(_: Session | None = Depends(require_read)):
 
 
 @app.get("/api/widgets/{widget_id}", tags=["widgets"], summary="Get one widget")
-async def get_widget(widget_id: str, _: Session | None = Depends(require_read)):
+async def get_widget(widget_id: str, _: Session | None = Depends(read_or_public)):
     w = _require_widget(widget_id)
     return {"id": w.id, **(await _widget_payload(w))}
 
@@ -1968,7 +1984,7 @@ async def get_widget(widget_id: str, _: Session | None = Depends(require_read)):
     tags=["widgets"],
     summary="Widget metadata",
 )
-async def get_widget_meta(widget_id: str, _: Session | None = Depends(require_read)):
+async def get_widget_meta(widget_id: str, _: Session | None = Depends(read_or_public)):
     """Static metadata — schema, description, refresh policy. The
     "knowledge" half of the knowledge store; LLMs should call this to
     learn what fields to expect from ``/data``."""
@@ -1981,7 +1997,7 @@ async def get_widget_meta(widget_id: str, _: Session | None = Depends(require_re
     tags=["widgets"],
     summary="Widget data (cached)",
 )
-async def get_widget_data(widget_id: str, _: Session | None = Depends(require_read)):
+async def get_widget_data(widget_id: str, _: Session | None = Depends(read_or_public)):
     w = _require_widget(widget_id)
     state = await widget_store.get_state(w.id)
     return {
@@ -1997,7 +2013,7 @@ async def get_widget_data(widget_id: str, _: Session | None = Depends(require_re
     tags=["widgets"],
     summary="Widget config",
 )
-async def get_widget_config(widget_id: str, _: Session | None = Depends(require_read)):
+async def get_widget_config(widget_id: str, _: Session | None = Depends(read_or_public)):
     w = _require_widget(widget_id)
     config = await widget_store.get_config(w.id) or dict(w.default_config)
     return {"id": w.id, "config": config, "default_config": w.default_config}
@@ -2047,7 +2063,7 @@ async def put_widget_config(
 )
 async def export_widget_csv(
     widget_id: str,
-    _: Session | None = Depends(require_read),
+    _: Session | None = Depends(read_or_public),
 ):
     """Streams whatever's in the widget's cached data as CSV. Generic
     shape detection: (1) if the payload has a key whose value is a
@@ -2656,7 +2672,7 @@ _ROTATION_DEFAULT = {
     tags=["rotation"],
     summary="Get rotation-mode config",
 )
-async def get_rotation(_: Session | None = Depends(require_read)):
+async def get_rotation(_: Session | None = Depends(read_or_public)):
     cur = await widget_store.get_config(_ROTATION_ID) or dict(_ROTATION_DEFAULT)
     return {"config": cur, "default": _ROTATION_DEFAULT}
 
@@ -2697,7 +2713,7 @@ async def put_rotation(
     tags=["announcements"],
     summary="Get auto-announcement config",
 )
-async def get_announcements(_: Session | None = Depends(require_read)):
+async def get_announcements(_: Session | None = Depends(read_or_public)):
     from . import announcements as ann
     saved = await widget_store.get_config(ann.CONFIG_ID) or {}
     return {
@@ -2769,7 +2785,7 @@ async def force_announcements_ingest(_: Session | None = Depends(require_read)):
 async def get_announcement_history(
     limit: int = 100,
     minutes: int | None = None,
-    _: Session | None = Depends(require_read),
+    _: Session | None = Depends(read_or_public),
 ):
     """Recent announcements as JSON. ``minutes`` filters to the last
     N minutes; without it, returns the last ``limit`` rows."""
@@ -2924,7 +2940,7 @@ async def _ha_get(path: str, params: dict | None = None) -> Any:
     summary="List every HA entity SolarSage consumes, per widget, "
             "with the current live value alongside.",
 )
-async def get_ha_integrations(_: Session | None = Depends(require_read)):
+async def get_ha_integrations(_: Session | None = Depends(read_or_public)):
     ha_url = os.getenv("HA_URL", "").rstrip("/")
     ha_token = os.getenv("HA_TOKEN")
     if not ha_url or not ha_token:
@@ -3033,7 +3049,7 @@ async def search_ha_entities(
     q: str = "",
     domain: str | None = None,
     limit: int = 25,
-    _: Session | None = Depends(require_read),
+    _: Session | None = Depends(read_or_public),
 ):
     payload = await _ha_get("/api/states") or []
     q = q.strip().lower()

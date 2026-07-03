@@ -6,7 +6,7 @@ const IS_NATIVE = typeof window !== "undefined"
   && window.Capacitor.isNativePlatform
   && window.Capacitor.isNativePlatform();
 
-export default function Login({ onLoggedIn }) {
+export default function Login({ onLoggedIn, onSkip }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
@@ -95,6 +95,15 @@ export default function Login({ onLoggedIn }) {
         <button className="primary" type="submit" disabled={busy} style={{ width: "100%" }}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
+        {onSkip && (
+          <button
+            type="button"
+            onClick={onSkip}
+            style={{ width: "100%", marginTop: 8, background: "transparent" }}
+          >
+            Skip — browse widgets without live EG4 data
+          </button>
+        )}
         <div className="muted" style={{ fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
           {IS_NATIVE
             ? "Credentials are stored in the device Keychain. They never leave the app — sign in talks directly to monitor.eg4electronics.com."

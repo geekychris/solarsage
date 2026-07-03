@@ -34,6 +34,7 @@ function resolveInitialMobile() {
 
 export default function App() {
   const [session, setSession] = useState(null);
+  const [showLogin, setShowLogin] = useState(true);
   const [bootChecked, setBootChecked] = useState(false);
   const [mobile, setMobile] = useState(() => resolveInitialMobile());
   const [rotation, setRotation] = useState(() => urlViewParam() === "rotation");
@@ -102,17 +103,28 @@ export default function App() {
   }, []);
 
   if (!bootChecked) return null;
-  if (!session) {
-    return <Login onLoggedIn={(s) => setSession(s)} />;
-  }
+  // Rotation view is public — no auth needed, doesn't touch EG4.
   if (rotation) {
     return <RotationMode onExit={exitRotation} />;
+  }
+  // If not signed in, still render the dashboard (widgets work off the
+  // cache without a session). EG4-specific tabs will show a sign-in
+  // prompt via the ``guest`` flag.
+  const activeSession = session || { username: "guest", guest: true, inverter_count: 0 };
+  if (!session && showLogin) {
+    return (
+      <Login
+        onLoggedIn={(s) => { setSession(s); setShowLogin(false); }}
+        onSkip={() => setShowLogin(false)}
+      />
+    );
   }
   if (mobile) {
     return (
       <MobileApp
-        session={session}
-        onLoggedOut={() => setSession(null)}
+        session={activeSession}
+        onLoggedOut={() => { setSession(null); setShowLogin(true); }}
+        onSignIn={() => setShowLogin(true)}
         onExitMobile={switchToDesktop}
         onEnterRotation={enterRotation}
         theme={theme}
@@ -122,8 +134,9 @@ export default function App() {
   }
   return (
     <Dashboard
-      session={session}
-      onLoggedOut={() => setSession(null)}
+      session={activeSession}
+      onLoggedOut={() => { setSession(null); setShowLogin(true); }}
+      onSignIn={() => setShowLogin(true)}
       onSwitchMobile={switchToMobile}
       onEnterRotation={enterRotation}
       theme={theme}

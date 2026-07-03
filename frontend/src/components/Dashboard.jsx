@@ -21,7 +21,7 @@ import LocalTab from "./LocalTab.jsx";
 
 const POLL_LIVE_MS = 15_000;
 
-export default function Dashboard({ session, onLoggedOut, onSwitchMobile, onEnterRotation, theme, onToggleTheme }) {
+export default function Dashboard({ session, onLoggedOut, onSignIn, onSwitchMobile, onEnterRotation, theme, onToggleTheme }) {
   const [inverters, setInverters] = useState([]);
   const [selected, setSelected] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
@@ -32,11 +32,20 @@ export default function Dashboard({ session, onLoggedOut, onSwitchMobile, onEnte
   const [tzOffsetMinutes, setTzOffsetMinutes] = useState(null);
   // Single-site for now — multi-site UI removed pending real implementation
   const siteId = "site-1";
-  const [activeTab, setActiveTab] = useState("now");
+  const [activeTab, setActiveTab] = useState(session?.guest ? "local" : "now");
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      // Guests skip the EG4-authed inverter list. Settings is a
+      // public GET (read_or_public) — still fetch that.
+      if (session?.guest) {
+        try {
+          const s = await api.settings();
+          if (!cancelled) setTzOffsetMinutes(s.tz_offset_minutes ?? null);
+        } catch {}
+        return;
+      }
       try {
         const [r, s] = await Promise.all([api.inverters(), api.settings()]);
         if (cancelled) return;
@@ -58,7 +67,7 @@ export default function Dashboard({ session, onLoggedOut, onSwitchMobile, onEnte
     return () => {
       cancelled = true;
     };
-  }, [onLoggedOut, settingsBump]);
+  }, [onLoggedOut, settingsBump, session]);
 
   // Today in the inverter's local timezone (YYYY-MM-DD)
   const todayLocal = (() => {
@@ -132,16 +141,24 @@ export default function Dashboard({ session, onLoggedOut, onSwitchMobile, onEnte
             </button>
           )}
           <button onClick={() => setSettingsOpen(true)}>Settings</button>
-          <button onClick={() => logout(false)}>Sign out</button>
-          <button
-            onClick={() => {
-              if (confirm("Forget saved credentials? Backend will stop auto-login on restart."))
-                logout(true);
-            }}
-            title="Sign out and delete saved credentials"
-          >
-            Forget
-          </button>
+          {session?.guest ? (
+            <button className="primary" onClick={onSignIn} title="Sign in to see live EG4 data">
+              Sign in
+            </button>
+          ) : (
+            <>
+              <button onClick={() => logout(false)}>Sign out</button>
+              <button
+                onClick={() => {
+                  if (confirm("Forget saved credentials? Backend will stop auto-login on restart."))
+                    logout(true);
+                }}
+                title="Sign out and delete saved credentials"
+              >
+                Forget
+              </button>
+            </>
+          )}
         </div>
       </div>
       <div className="dashboard">
@@ -184,6 +201,17 @@ export default function Dashboard({ session, onLoggedOut, onSwitchMobile, onEnte
           </div>
 
           <div className={`tab-section ${activeTab === "now" || activeTab === "all" ? "active" : ""}`}>
+            {session?.guest && (
+              <div className="panel" style={{ padding: 16, textAlign: "center" }}>
+                <p style={{ margin: "8px 0" }}>
+                  Sign in to see live EG4 data (power flow, per-string PV, live tiles, weather panel, raw data).
+                </p>
+                <button className="primary" onClick={onSignIn}>Sign in</button>
+                <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                  Widgets in the Local tab work without signing in.
+                </div>
+              </div>
+            )}
             {selected && <PowerFlow snapshot={snapshot} />}
             {selectedInv && (
               <div className="panel">
