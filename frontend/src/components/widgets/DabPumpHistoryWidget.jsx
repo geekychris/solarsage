@@ -126,6 +126,14 @@ export default function DabPumpHistoryWidget({ data }) {
         keyLabel={keyLabel}
         colour={colour}
       />
+      {data.collected_hours != null && data.collected_hours < 168 && (
+        <div className="muted" style={{ fontSize: 10 }}>
+          Only {data.collected_hours < 24
+            ? `${Math.round(data.collected_hours)}h`
+            : `${Math.round(data.collected_hours / 24)}d`}
+          {" "}of history in HA so far — chart fills in as more data arrives.
+        </div>
+      )}
     </div>
   );
 }

@@ -102,10 +102,15 @@ def _bucket_deltas(
     in each bucket. Negative deltas are clamped to 0 (would only happen
     if the totalizer resets)."""
     values = [_value_at(samples, b) for b in boundaries]
-    # First boundary may predate all samples; carry the earliest sample
-    # backward so the first bucket still gets a baseline instead of NaN.
-    if values and values[0] is None and samples:
-        values[0] = samples[0][1]
+    # Any None values (boundaries older than the earliest sample) get
+    # the earliest sample's value — the totalizer hadn't ticked past
+    # that number yet, so treating the delta as 0 across those buckets
+    # is the correct thing to say.
+    if samples:
+        earliest = samples[0][1]
+        for i, v in enumerate(values):
+            if v is None:
+                values[i] = earliest
     deltas: list[float] = []
     for i in range(len(values) - 1):
         a, b = values[i], values[i + 1]
@@ -176,6 +181,8 @@ class DabPumpHistoryWidget(Widget):
                               "the recorder may still be warming up.",
                 "by_hour": [], "by_day": [],
             }
+        collected_since = samples[0][0].astimezone().isoformat()
+        collected_hours = (now - samples[0][0]).total_seconds() / 3600
 
         # 24h × hourly. Buckets bounded to top-of-hour so the labels
         # line up cleanly with wall-clock (in the user's local zone).
@@ -214,13 +221,15 @@ class DabPumpHistoryWidget(Widget):
         ]
 
         return {
-            "fetched_at":  now.isoformat(),
-            "entity_id":   eid,
-            "total_24h":   round(sum(hourly_deltas), 1),
-            "total_7d":    round(sum(daily_deltas),  1),
-            "avg_daily":   round(sum(daily_deltas) / 7, 1),
-            "peak_hour":   max(by_hour, key=lambda x: x["gallons"]) if by_hour else None,
-            "peak_day":    max(by_day,  key=lambda x: x["gallons"]) if by_day else None,
-            "by_hour":     by_hour,
-            "by_day":      by_day,
+            "fetched_at":       now.isoformat(),
+            "entity_id":        eid,
+            "collected_since":  collected_since,
+            "collected_hours":  round(collected_hours, 1),
+            "total_24h":        round(sum(hourly_deltas), 1),
+            "total_7d":         round(sum(daily_deltas),  1),
+            "avg_daily":        round(sum(daily_deltas) / 7, 1),
+            "peak_hour":        max(by_hour, key=lambda x: x["gallons"]) if by_hour else None,
+            "peak_day":         max(by_day,  key=lambda x: x["gallons"]) if by_day else None,
+            "by_hour":          by_hour,
+            "by_day":           by_day,
         }
