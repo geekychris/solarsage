@@ -32,14 +32,6 @@
     "caption": "Water Tank — gallons + days-remaining projection with tiered warning bar"
   },
   {
-    "file": "09-widget-peak-load.png",
-    "caption": "Peak Load — rolling 30-day max simultaneous house load"
-  },
-  {
-    "file": "10-widget-acpv-overlay.png",
-    "caption": "AC vs PV Overlay — 24h of PV production against smart_ac consumption"
-  },
-  {
     "file": "11-widget-sky-tonight.png",
     "caption": "Sky Tonight — naked-eye planets tonight + moon phase, computed locally"
   },
