@@ -49,6 +49,7 @@ import MeteorShowersWidget from "./widgets/MeteorShowersWidget.jsx";
 import BirdMigrationWidget from "./widgets/BirdMigrationWidget.jsx";
 import DabPumpWidget from "./widgets/DabPumpWidget.jsx";
 import DabPumpControlWidget from "./widgets/DabPumpControlWidget.jsx";
+import DabPumpHistoryWidget from "./widgets/DabPumpHistoryWidget.jsx";
 import WidgetSettings from "./WidgetSettings.jsx";
 
 const RENDERERS = {
@@ -99,6 +100,7 @@ const RENDERERS = {
   bird_migration: BirdMigrationWidget,
   dab_pump: DabPumpWidget,
   dab_pump_control: DabPumpControlWidget,
+  dab_pump_history: DabPumpHistoryWidget,
 };
 
 // Stable order for subtabs when more than one is present. "Local" is

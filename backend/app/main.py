@@ -73,6 +73,7 @@ from .widgets.meteor_showers import MeteorShowersWidget
 from .widgets.bird_migration import BirdMigrationWidget
 from .widgets.dab_pump import DabPumpWidget
 from .widgets.dab_pump_control import DabPumpControlWidget
+from .widgets.dab_pump_history import DabPumpHistoryWidget
 from .widgets.property_mode import PropertyModeWidget
 from .widgets.news import NewsWidget
 from .widgets.reservations import ReservationsWidget
@@ -197,6 +198,7 @@ def _register_builtin_widgets() -> None:
         BirdMigrationWidget(),
         DabPumpWidget(),
         DabPumpControlWidget(),
+        DabPumpHistoryWidget(),
         PropertyTaxWidget(),
         ContactsWidget(),
         TodoWidget(),

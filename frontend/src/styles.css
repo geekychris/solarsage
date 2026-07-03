@@ -1953,6 +1953,27 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
 .dab-chip:disabled { opacity: 0.5; cursor: wait; }
 .dab-chip-warn { color: #ef6f6c; border-color: rgba(239,111,108,0.4); }
 
+/* DAB water-pump — history */
+.dab-hist { display: flex; flex-direction: column; gap: 8px; }
+.dab-hist-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+}
+.dab-hist-toggle { display: flex; gap: 4px; }
+.dab-hist-toggle button {
+  padding: 3px 10px; font-size: 11px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: transparent; color: inherit; cursor: pointer;
+}
+.dab-hist-toggle button.active {
+  background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3);
+}
+.dab-hist-summary {
+  display: flex; gap: 16px; flex-wrap: wrap; justify-content: flex-end;
+}
+.dab-hist-big { font-size: 16px; font-weight: 700; }
+.dab-hist-sub { font-size: 11px; font-weight: 400; color: var(--muted, #8a94a3); }
+.dab-hist-chart { width: 100%; }
+
 /* Meteor showers */
 .meteor-hero {
   display: flex; justify-content: space-between; align-items: center;
