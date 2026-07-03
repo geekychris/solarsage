@@ -418,10 +418,14 @@ async function main() {
   await login(page);
 
   async function ensureLocalTab() {
+    // Close any lingering Settings modal from a previous shot first.
+    const closeBtn = page.locator(".settings-tab-close").first();
+    if (await closeBtn.isVisible().catch(() => false)) {
+      await closeBtn.click().catch(() => {});
+      await settle(page, 300);
+    }
     if (await page.locator(".local-subtab").count() > 0) return;
-    // Whenever we don't have subtabs visible, do a full reload — this
-    // fires the auto-login again if needed and puts us on a known
-    // start state. Cheaper than hunting through half-loaded UI.
+    // Full reload puts us on a known start state.
     await page.goto(URL, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".tabs .tab", { timeout: 15_000 });
     const localTab = page.locator(".tabs .tab").filter({ hasText: /^Local$/ }).first();
