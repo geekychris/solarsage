@@ -263,27 +263,10 @@ const SHOTS = [
       return el.boundingBox();
     },
   },
-  {
-    file: "16-rotation-mode.png",
-    caption: "Rotation mode — full-screen kiosk view walking through configured widgets",
-    async open(page) {
-      // Close any modal first
-      await page.keyboard.press("Escape").catch(() => {});
-      await settle(page, 300);
-      await page.goto(`${URL}/?view=rotation`);
-      await settle(page, 4000);
-    },
-  },
-  {
-    file: "17-mobile-dashboard.png",
-    caption: "Mobile viewport — same widgets, 1-column grid",
-    viewport: MOBILE_VIEWPORT,
-    async open(page) {
-      await page.goto(URL);
-      await settle(page, 2500);
-    },
-  },
   // ------- per-widget close-ups (auto-generated) -------
+  // These come BEFORE the rotation + mobile shots below so the
+  // dashboard's Local view is still where we last left it — 40+
+  // navigations back into rotation view chew unnecessary time.
   widget(20, "Safety",    "aqi",              "Air quality",                 "Air Quality — US AQI + PM2.5/PM10/ozone/dust + 24h peak. Source: Open-Meteo."),
   widget(21, "Safety",    "quakes",           "Earthquakes",                 "Earthquakes — recent felt quakes (M ≥ 2.5) within a configurable radius. Source: USGS."),
   widget(22, "Safety",    "storms",           "Tropical storms",             "Tropical storms — active NHC cyclones, filtered to configured basins (default EP)."),
@@ -324,6 +307,26 @@ const SHOTS = [
   widget(57, "Lists",     "quicklinks",       "Quick links",                 "Quick links — grouped bookmarks. Ships an 'Apps' group with smart_ac + HA."),
   widget(58, "Lists",     "shopping_list",    "Shopping list (bring down)",  "Shopping list — items to buy in the US on your next border run."),
   widget(59, "Lists",     "todo",             "Todo",                        "Todo — priority (1..5), optional due date, done flag, notes. Syncs to Sheets when enabled."),
+  // These two navigate away from the dashboard — keep them LAST.
+  {
+    file: "16-rotation-mode.png",
+    caption: "Rotation mode — full-screen kiosk view walking through configured widgets",
+    async open(page) {
+      await page.keyboard.press("Escape").catch(() => {});
+      await settle(page, 300);
+      await page.goto(`${URL}/?view=rotation`);
+      await settle(page, 4000);
+    },
+  },
+  {
+    file: "17-mobile-dashboard.png",
+    caption: "Mobile viewport — same widgets, 1-column grid",
+    viewport: MOBILE_VIEWPORT,
+    async open(page) {
+      await page.goto(URL);
+      await settle(page, 2500);
+    },
+  },
 ];
 
 async function clickSubTab(page, name) {
@@ -411,19 +414,16 @@ async function main() {
   await login(page);
 
   async function ensureLocalTab() {
-    const isOnLocal = await page.locator(".local-subtab").count();
-    if (isOnLocal > 0) return;
-    // If the top-level tab bar isn't visible either, we've navigated
-    // away (rotation view, elsewhere) — reload the dashboard first.
-    const hasShell = await page.locator(".tabs .tab").count();
-    if (hasShell === 0) {
-      await page.goto(URL);
-      await page.waitForSelector(".tabs .tab", { timeout: 15_000 });
-    }
+    if (await page.locator(".local-subtab").count() > 0) return;
+    // Whenever we don't have subtabs visible, do a full reload — this
+    // fires the auto-login again if needed and puts us on a known
+    // start state. Cheaper than hunting through half-loaded UI.
+    await page.goto(URL, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector(".tabs .tab", { timeout: 15_000 });
     const localTab = page.locator(".tabs .tab").filter({ hasText: /^Local$/ }).first();
     if (await localTab.count() > 0) {
       await localTab.click();
-      await page.waitForSelector(".local-subtab", { timeout: 10_000 });
+      await page.waitForSelector(".local-subtab", { timeout: 15_000 });
     }
   }
 
