@@ -341,7 +341,7 @@ async function clickSubTab(page, name) {
   }
   const clicked = await page.evaluate((n) => {
     const els = Array.from(document.querySelectorAll(".local-subtab"));
-    const hit = els.find((e) => e.textContent.trim().replace(/\s+\d+$/, "") === n);
+    const hit = els.find((e) => e.textContent.trim().replace(/\s*\d+$/, "") === n);
     if (!hit) return false;
     hit.click();
     return true;
