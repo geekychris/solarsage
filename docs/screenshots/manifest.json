@@ -24,8 +24,24 @@
     "caption": "Solar Vitals — SoC, PV per string, load breakdown, per-AC override, per-room temp/humidity"
   },
   {
+    "file": "07-widget-climate-chart.png",
+    "caption": "Room Climate History — 24h/3d/7d temp + humidity with hover crosshair"
+  },
+  {
     "file": "08-widget-water-tank.png",
     "caption": "Water Tank — gallons + days-remaining projection with tiered warning bar"
+  },
+  {
+    "file": "09-widget-peak-load.png",
+    "caption": "Peak Load — rolling 30-day max simultaneous house load"
+  },
+  {
+    "file": "10-widget-acpv-overlay.png",
+    "caption": "AC vs PV Overlay — 24h of PV production against smart_ac consumption"
+  },
+  {
+    "file": "11-widget-sky-tonight.png",
+    "caption": "Sky Tonight — naked-eye planets tonight + moon phase, computed locally"
   },
   {
     "file": "12-settings-system.png",
@@ -42,14 +58,6 @@
   {
     "file": "15-settings-rotation.png",
     "caption": "Settings → Rotation — fullscreen 'screensaver' widget rotation with per-step dwell"
-  },
-  {
-    "file": "16-rotation-mode.png",
-    "caption": "Rotation mode — full-screen kiosk view walking through configured widgets"
-  },
-  {
-    "file": "17-mobile-dashboard.png",
-    "caption": "Mobile viewport — same widgets, 1-column grid"
   },
   {
     "file": "20-widget-aqi.png",
@@ -210,5 +218,13 @@
   {
     "file": "59-widget-todo.png",
     "caption": "Todo — priority (1..5), optional due date, done flag, notes. Syncs to Sheets when enabled."
+  },
+  {
+    "file": "16-rotation-mode.png",
+    "caption": "Rotation mode — full-screen kiosk view walking through configured widgets"
+  },
+  {
+    "file": "17-mobile-dashboard.png",
+    "caption": "Mobile viewport — same widgets, 1-column grid"
   }
 ]
