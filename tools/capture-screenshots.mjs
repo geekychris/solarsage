@@ -330,20 +330,24 @@ const SHOTS = [
 ];
 
 async function clickSubTab(page, name) {
-  // Wait for the subtabs to render, then use Playwright's filter().
+  // Wait for subtabs to render, then trigger the click programmatically.
+  // Playwright's .click() can hang when a stale overlay intercepts pointer
+  // events; a direct DOM click bypasses all of that.
   try {
-    await page.waitForSelector(".local-subtab", { timeout: 5000 });
+    await page.waitForSelector(".local-subtab", { timeout: 10_000 });
   } catch {
     console.warn(`no subtabs visible when trying to click '${name}'`);
     return;
   }
-  const btn = page.locator(".local-subtab").filter({ hasText: name }).first();
-  if (await btn.count() === 0) {
-    console.warn(`subtab '${name}' not found`);
-    return;
-  }
-  await btn.click({ timeout: 5000 });
-  await page.waitForTimeout(500);
+  const clicked = await page.evaluate((n) => {
+    const els = Array.from(document.querySelectorAll(".local-subtab"));
+    const hit = els.find((e) => e.textContent.trim().replace(/\s+\d+$/, "") === n);
+    if (!hit) return false;
+    hit.click();
+    return true;
+  }, name);
+  if (!clicked) console.warn(`subtab '${name}' not found`);
+  await page.waitForTimeout(600);
 }
 
 async function openSettings(page, tabId) {
