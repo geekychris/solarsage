@@ -164,20 +164,36 @@ def _local_altaz(
     return alt / RAD, az / RAD
 
 
+_COMPASS_16 = [
+    "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+    "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
+]
+
+
+def _compass(azimuth_deg: float | None) -> str:
+    if azimuth_deg is None:
+        return ""
+    idx = int((azimuth_deg % 360) / 22.5 + 0.5) % 16
+    return _COMPASS_16[idx]
+
+
 def _visibility_tonight(
     planet: str, when: datetime, lat: float, lon: float,
 ) -> dict[str, Any]:
-    """Sample altitude every 10 minutes over the astronomical night
-    window (sunset − 30 min → next sunrise + 30 min) and report the
-    peak + rough rise/set times if above the horizon at some point."""
+    """Sample altitude + azimuth every 10 minutes over the astronomical
+    night window (~17:00 → next 08:00 local) and report peak / rise /
+    set with the compass direction at each moment."""
     step = timedelta(minutes=10)
     start = when.replace(hour=17, minute=0, second=0, microsecond=0)
     end = start + timedelta(hours=15)
     ra, dec = _geo_equatorial(planet, start)  # slow enough intra-night
     peak_alt = -90.0
     peak_at: datetime | None = None
+    peak_az: float | None = None
     rise_at: datetime | None = None
+    rise_az: float | None = None
     set_at: datetime | None = None
+    set_az: float | None = None
     prev_alt = None
     t = start
     while t <= end:
@@ -185,20 +201,27 @@ def _visibility_tonight(
         if alt > peak_alt:
             peak_alt = alt
             peak_at = t
+            peak_az = az
         if prev_alt is not None:
             if prev_alt <= 0 < alt and rise_at is None:
                 rise_at = t
+                rise_az = az
             if prev_alt > 0 >= alt and rise_at is not None and set_at is None:
                 set_at = t
+                set_az = az
         prev_alt = alt
         t += step
     return {
         "planet": planet,
         "visible": peak_alt > 5,     # 5° cutoff avoids "yes but on the horizon"
         "peak_altitude_deg": round(peak_alt, 1),
-        "peak_at": peak_at.astimezone().isoformat() if peak_at else None,
+        "peak_at":       peak_at.astimezone().isoformat() if peak_at else None,
+        "peak_azimuth_deg":  round(peak_az, 0) if peak_az is not None else None,
+        "peak_direction":    _compass(peak_az),
         "rises_at":  rise_at.astimezone().isoformat() if rise_at else None,
+        "rises_direction":   _compass(rise_az),
         "sets_at":   set_at.astimezone().isoformat() if set_at else None,
+        "sets_direction":    _compass(set_az),
     }
 
 

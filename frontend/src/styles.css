@@ -1870,6 +1870,8 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
   border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 .sky-below { opacity: 0.4; }
+.sky-dir { font-size: 10px; letter-spacing: 0.04em; margin-left: 2px; }
+.sky-az  { font-size: 10px; }
 
 /* Meteor showers */
 .meteor-hero {

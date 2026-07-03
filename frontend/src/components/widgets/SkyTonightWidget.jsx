@@ -39,7 +39,12 @@ export default function SkyTonightWidget({ data }) {
       <table className="sky-table">
         <thead>
           <tr>
-            <th></th><th>Rises</th><th>Peak</th><th>Sets</th><th>°alt</th>
+            <th></th>
+            <th>Rises</th>
+            <th>Peak</th>
+            <th>Sets</th>
+            <th title="Peak altitude above horizon">°alt</th>
+            <th title="Compass direction at peak">Look</th>
           </tr>
         </thead>
         <tbody>
@@ -48,10 +53,31 @@ export default function SkyTonightWidget({ data }) {
               <td>
                 <strong>{PLANET_EMOJI[p.planet]} {p.planet}</strong>
               </td>
-              <td>{fmtClock(p.rises_at)}</td>
-              <td>{fmtClock(p.peak_at)}</td>
-              <td>{fmtClock(p.sets_at)}</td>
+              <td>
+                {fmtClock(p.rises_at)}
+                {p.rises_direction && (
+                  <span className="muted sky-dir"> {p.rises_direction}</span>
+                )}
+              </td>
+              <td>
+                {fmtClock(p.peak_at)}
+                {p.peak_direction && (
+                  <span className="muted sky-dir"> {p.peak_direction}</span>
+                )}
+              </td>
+              <td>
+                {fmtClock(p.sets_at)}
+                {p.sets_direction && (
+                  <span className="muted sky-dir"> {p.sets_direction}</span>
+                )}
+              </td>
               <td>{p.peak_altitude_deg.toFixed(0)}°</td>
+              <td>
+                <strong>{p.peak_direction || "—"}</strong>
+                {p.peak_azimuth_deg != null && (
+                  <div className="muted sky-az">{p.peak_azimuth_deg}°</div>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
