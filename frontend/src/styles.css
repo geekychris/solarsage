@@ -1987,6 +1987,14 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
 .dab-hist-daynav button:disabled { opacity: 0.3; cursor: default; }
 .dab-hist-day { text-align: center; min-width: 90px; }
 .dab-hist-day-label { font-size: 12px; font-weight: 700; }
+.dab-hist-legend {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  font-size: 10px; color: var(--muted, #8a94a3);
+}
+.dab-hist-legend-swatch {
+  display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+  margin-right: 2px;
+}
 
 /* Meteor showers */
 .meteor-hero {
