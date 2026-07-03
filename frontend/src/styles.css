@@ -1929,6 +1929,13 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
 .dab-mode-btn.dab-sleep.active {
   border-color: #a29bfe; background: rgba(162,155,254,0.15);
 }
+.dab-mode-btn.pending {
+  animation: dab-pulse 1.2s ease-in-out infinite;
+}
+@keyframes dab-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
 .dab-control-detail { display: flex; flex-direction: column; gap: 8px; }
 .dab-selector .dab-chip-row {
   display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px;
