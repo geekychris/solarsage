@@ -441,14 +441,26 @@ async function main() {
       console.warn(`open failed for ${shot.file}: ${ex.message}`);
       continue;
     }
-    const clip = shot.region ? await shot.region(page) : null;
-    await page.screenshot({
-      path: path.join(OUT_DIR, shot.file),
-      clip: clip || undefined,
-      fullPage: shot.fullPage || false,
-    });
-    manifest.push({ file: shot.file, caption: shot.caption });
-    console.log(`✓ ${shot.file}`);
+    let clip = null;
+    try {
+      clip = shot.region ? await shot.region(page) : null;
+    } catch (ex) {
+      console.warn(`region failed for ${shot.file}: ${ex.message}`);
+    }
+    // Reject invalid clips (missing or zero-size) — let Playwright do
+    // a full-viewport capture in that case so the shot still lands.
+    if (clip && (!(clip.width > 0 && clip.height > 0))) clip = null;
+    try {
+      await page.screenshot({
+        path: path.join(OUT_DIR, shot.file),
+        clip: clip || undefined,
+        fullPage: shot.fullPage || false,
+      });
+      manifest.push({ file: shot.file, caption: shot.caption });
+      console.log(`✓ ${shot.file}`);
+    } catch (ex) {
+      console.warn(`screenshot failed for ${shot.file}: ${ex.message}`);
+    }
   }
   await fs.writeFile(
     path.join(OUT_DIR, "manifest.json"),
