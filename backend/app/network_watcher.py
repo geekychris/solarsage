@@ -26,7 +26,6 @@ from typing import Any
 
 import aiohttp
 
-from .notify import dispatch as notify_dispatch
 from .storage import History
 
 log = logging.getLogger("solarsage.network")
@@ -81,6 +80,9 @@ async def _notify_recovery(started_ts_ms: int, ended_ts_ms: int) -> dict[str, An
         f"⚠️ Network was unreachable for {_fmt_duration(duration_s)} "
         f"(since {started_str}). Connectivity has been restored."
     )
+    # Lazy-import — app.notify pulls in app.events, which itself imports
+    # app.notify. Loading it at module scope racelocks the interpreter.
+    from .notify import dispatch as notify_dispatch
     return await notify_dispatch({
         "type": "telegram",
         "text": text,
