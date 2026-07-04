@@ -173,6 +173,18 @@ export const handlers = {
   "GET /api/string_health": async ({ query }) => forecast.stringHealth(query),
   "GET /api/alerts": async ({ query }) => ({ site_id: query.site_id, alerts: [] }),
   "POST /api/alerts/ack": async () => ({ ok: true }),
+  // Network watcher isn't wired into the native/local runtime — return
+  // empty state so the panel renders as "Unknown" rather than crashing.
+  "GET /api/network/status": async () => ({
+    now_ms: Date.now(),
+    latest: null,
+    open_outage: null,
+    window_ms: 86_400_000,
+    summary: { total: 0, ok_count: 0, last_ts: null, avg_latency_ms: null },
+    uptime_pct_24h: null,
+  }),
+  "GET /api/network/history": async () => ({ hours: 24, since_ms: Date.now() - 86_400_000, checks: [] }),
+  "GET /api/network/outages": async () => ({ outages: [] }),
   "GET /api/health": async () => ({ ok: true, native: true }),
   "GET /api/diagnostic": async ({ query }) => eg4.diagnostic(query.serial),
   "GET /api/summary": notImplemented("summary"),

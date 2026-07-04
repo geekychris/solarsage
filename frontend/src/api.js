@@ -173,6 +173,12 @@ export const api = {
       `/api/alerts?site_id=${encodeURIComponent(siteId)}&unacknowledged_only=${unack}`
     ),
   ackAlert: (id) => request(`/api/alerts/${id}/ack`, { method: "POST" }),
+  // Network connectivity monitor
+  networkStatus: () => request("/api/network/status"),
+  networkHistory: (hours = 24) =>
+    request(`/api/network/history?hours=${hours}`),
+  networkOutages: (limit = 100) =>
+    request(`/api/network/outages?limit=${limit}`),
   // Export
   exportCsvUrl: (serial, field, start, end) =>
     `/api/export.csv?serial=${encodeURIComponent(serial)}&field=${encodeURIComponent(field)}&start=${start}&end=${end}&api_key=${encodeURIComponent("local-dev-key-change-me")}`,

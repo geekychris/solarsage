@@ -27,6 +27,8 @@ from . import credentials as creds_store
 from . import weather as weather_api
 from .ac_model import fit_ac_model
 from .alerts_watcher import run_alerts
+from .network_watcher import run_network_watcher
+from .rollup import run_rollup, run_rollup_for_day
 from .appliances_catalog import seed_for_site
 from .eg4_history import EG4ChartError, fetch_day_attr, fetch_day_multiline
 from .scheduler import schedule_appliances
@@ -307,6 +309,10 @@ async def lifespan(app: FastAPI):
     log.info("auto-login background task started")
     alerts_task = asyncio.create_task(run_alerts(history))
     log.info("alerts watcher started")
+    network_task = asyncio.create_task(run_network_watcher(history))
+    log.info("network watcher started")
+    rollup_task = asyncio.create_task(run_rollup(history, sheets, DB_PATH))
+    log.info("rollup task started")
     if sheets is not None:
         # Materialize any Sheets-backed widget tabs that don't exist yet.
         for _w in widget_registry.all():
@@ -335,6 +341,8 @@ async def lifespan(app: FastAPI):
     events_task.cancel()
     widgets_task.cancel()
     alerts_task.cancel()
+    network_task.cancel()
+    rollup_task.cancel()
     if auto_task:
         auto_task.cancel()
     if mqtt is not None:
@@ -1692,6 +1700,71 @@ async def list_alerts(site_id: str = Query(default="site-1"),
 async def ack_alert(alert_id: int, session: Session | None = Depends(require_read)):
     await history.acknowledge_alert(alert_id)
     return {"ok": True}
+
+
+@app.get("/api/network/status")
+async def network_status(session: Session | None = Depends(read_or_public)):
+    """Current connectivity state: last probe, in-progress outage (if any),
+    24h uptime %, and average round-trip latency."""
+    now_ms = int(time.time() * 1000)
+    day_ago = now_ms - 86_400_000
+    latest = await history.latest_network_check()
+    summary = await history.network_summary(day_ago)
+    open_outage = await history.get_open_network_outage()
+    uptime_pct = None
+    if summary["total"]:
+        uptime_pct = round(100.0 * summary["ok_count"] / summary["total"], 2)
+    return {
+        "now_ms": now_ms,
+        "latest": latest,
+        "open_outage": open_outage,
+        "window_ms": 86_400_000,
+        "summary": summary,
+        "uptime_pct_24h": uptime_pct,
+    }
+
+
+@app.get("/api/network/history")
+async def network_history(
+    hours: int = Query(default=24, ge=1, le=24 * 30),
+    limit: int = Query(default=5000, ge=1, le=20000),
+    session: Session | None = Depends(read_or_public),
+):
+    """Raw per-probe log for building timelines / charts."""
+    since_ms = int(time.time() * 1000) - hours * 3_600_000
+    return {
+        "hours": hours,
+        "since_ms": since_ms,
+        "checks": await history.list_network_checks(since_ms, limit=limit),
+    }
+
+
+@app.get("/api/network/outages")
+async def network_outages(
+    limit: int = Query(default=100, ge=1, le=500),
+    session: Session | None = Depends(read_or_public),
+):
+    return {"outages": await history.list_network_outages(limit=limit)}
+
+
+@app.post("/api/rollup/run")
+async def rollup_run(
+    date: str = Query(..., description="YYYY-MM-DD (inverter local tz)"),
+    force: bool = Query(default=False, description="Re-append even if date already present"),
+    session: Session = Depends(require_session),
+):
+    """Manually append one day's rollup rows to Google Sheets."""
+    if sheets is None:
+        raise HTTPException(status_code=412, detail="Google Sheets not configured")
+    from datetime import date as _date_cls
+    try:
+        y, mo, d = (int(x) for x in date.split("-"))
+        day = _date_cls(y, mo, d)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"bad date: {exc}") from exc
+    return await run_rollup_for_day(
+        history, sheets, DB_PATH, day, skip_if_exists=not force,
+    )
 
 
 def _analyze_day_cycle(

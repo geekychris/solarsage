@@ -17,6 +17,7 @@ import SchedulerPanel from "./SchedulerPanel.jsx";
 import Heatmap from "./Heatmap.jsx";
 import AlertsPanel from "./AlertsPanel.jsx";
 import HealthPanel from "./HealthPanel.jsx";
+import NetworkPanel from "./NetworkPanel.jsx";
 import LocalTab from "./LocalTab.jsx";
 
 const POLL_LIVE_MS = 15_000;
@@ -275,6 +276,7 @@ export default function Dashboard({ session, onLoggedOut, onSignIn, onSwitchMobi
 
               <div className={`tab-section ${eg4Sub === "health" || eg4Sub === "all" ? "active" : ""}`}>
                 {selected && <HealthPanel key={`hp-${selected}-${settingsBump}`} serial={selected} />}
+                <NetworkPanel />
                 {siteId && <AlertsPanel key={`al-${siteId}`} siteId={siteId} />}
                 {siteId && <AppliancesPanel key={`ap-${siteId}`} siteId={siteId} />}
               </div>

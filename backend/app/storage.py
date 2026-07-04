@@ -85,6 +85,25 @@ CREATE TABLE IF NOT EXISTS announcement_history (
 );
 CREATE INDEX IF NOT EXISTS idx_announcement_history_recent
   ON announcement_history(ts DESC);
+CREATE TABLE IF NOT EXISTS network_checks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL,
+  target TEXT NOT NULL,
+  ok INTEGER NOT NULL,
+  latency_ms INTEGER,
+  error TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_network_checks_recent
+  ON network_checks(ts DESC);
+CREATE TABLE IF NOT EXISTS network_outages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  started_ts INTEGER NOT NULL,
+  ended_ts INTEGER,
+  duration_seconds INTEGER,
+  notified INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_network_outages_recent
+  ON network_outages(started_ts DESC);
 """
 
 # Run after CREATE TABLE — adds site_id to existing tables for users
@@ -544,6 +563,145 @@ class History:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("UPDATE alerts SET acknowledged = 1 WHERE id = ?", (alert_id,))
             await db.commit()
+
+    # ------------------------- network connectivity ------------------------
+    async def record_network_check(
+        self, ts_ms: int, target: str, ok: bool,
+        latency_ms: int | None, error: str | None,
+    ) -> None:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "INSERT INTO network_checks (ts, target, ok, latency_ms, error)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (ts_ms, target, 1 if ok else 0, latency_ms, error),
+            )
+            await db.commit()
+
+    async def list_network_checks(
+        self, since_ms: int, limit: int = 5000,
+    ) -> list[dict[str, Any]]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT ts, target, ok, latency_ms, error FROM network_checks"
+                " WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
+                (since_ms, limit),
+            )
+            return [dict(r) for r in await cur.fetchall()]
+
+    async def network_summary(
+        self, since_ms: int, end_ms: int | None = None,
+    ) -> dict[str, Any]:
+        """Aggregate stats over a window: total probes, successes, avg
+        latency of successful probes, last check timestamp. ``end_ms``
+        is exclusive; omit for open-ended (up to now)."""
+        params: list[Any] = [since_ms]
+        where = "ts >= ?"
+        if end_ms is not None:
+            where += " AND ts < ?"
+            params.append(end_ms)
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute(
+                f"SELECT COUNT(*) AS total,"
+                f" COALESCE(SUM(ok), 0) AS ok_count,"
+                f" MAX(ts) AS last_ts,"
+                f" AVG(CASE WHEN ok=1 THEN latency_ms END) AS avg_latency"
+                f" FROM network_checks WHERE {where}",
+                params,
+            )
+            row = await cur.fetchone()
+            return {
+                "total": row[0] or 0,
+                "ok_count": row[1] or 0,
+                "last_ts": row[2],
+                "avg_latency_ms": row[3],
+            }
+
+    async def network_outages_in_range(
+        self, start_ms: int, end_ms: int,
+    ) -> list[dict[str, Any]]:
+        """Outages whose active window overlaps [start_ms, end_ms)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT * FROM network_outages"
+                " WHERE started_ts < ?"
+                " AND (ended_ts IS NULL OR ended_ts > ?)"
+                " ORDER BY started_ts ASC",
+                (end_ms, start_ms),
+            )
+            return [dict(r) for r in await cur.fetchall()]
+
+    async def latest_network_check(self) -> dict[str, Any] | None:
+        """Most-recent per-check row across all targets, with any_ok flag
+        computed over the same wall-clock probe cycle (ts within 5s)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT MAX(ts) AS ts FROM network_checks",
+            )
+            row = await cur.fetchone()
+            if not row or row["ts"] is None:
+                return None
+            latest_ts = row["ts"]
+            cur = await db.execute(
+                "SELECT target, ok, latency_ms, error, ts FROM network_checks"
+                " WHERE ts BETWEEN ? AND ?",
+                (latest_ts - 5000, latest_ts),
+            )
+            rows = [dict(r) for r in await cur.fetchall()]
+            any_ok = any(r["ok"] for r in rows)
+            return {"ts": latest_ts, "any_ok": any_ok, "probes": rows}
+
+    async def open_network_outage(self, started_ts: int) -> int:
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute(
+                "INSERT INTO network_outages (started_ts) VALUES (?)",
+                (started_ts,),
+            )
+            await db.commit()
+            return cur.lastrowid
+
+    async def close_network_outage(
+        self, outage_id: int, ended_ts: int, notified: bool = False,
+    ) -> None:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE network_outages SET ended_ts = ?,"
+                " duration_seconds = (? - started_ts) / 1000,"
+                " notified = ?"
+                " WHERE id = ?",
+                (ended_ts, ended_ts, 1 if notified else 0, outage_id),
+            )
+            await db.commit()
+
+    async def get_open_network_outage(self) -> dict[str, Any] | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT * FROM network_outages"
+                " WHERE ended_ts IS NULL ORDER BY id DESC LIMIT 1",
+            )
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+    async def list_network_outages(self, limit: int = 100) -> list[dict[str, Any]]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT * FROM network_outages"
+                " ORDER BY started_ts DESC LIMIT ?",
+                (limit,),
+            )
+            return [dict(r) for r in await cur.fetchall()]
+
+    async def prune_network_checks(self, older_than_ms: int) -> int:
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute(
+                "DELETE FROM network_checks WHERE ts < ?", (older_than_ms,),
+            )
+            await db.commit()
+            return cur.rowcount
 
     async def get_settings(self) -> dict[str, str]:
         async with aiosqlite.connect(self.db_path) as db:

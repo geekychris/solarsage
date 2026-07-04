@@ -226,6 +226,55 @@ class SheetsSync:
     ) -> None:
         await asyncio.to_thread(self._write_sync, tab, field_order, items)
 
+    # --- append (long-term retention) --------------------------------
+
+    def _append_rows_sync(
+        self, tab: str, field_order: list[str],
+        items: list[dict[str, Any]],
+    ) -> int:
+        """Append ``items`` after the last non-empty row. Never truncates
+        prior rows — safe for indefinite-retention logs."""
+        if not items:
+            return 0
+        ws = self._ensure_tab_sync(tab, field_order)
+        headers = [h.strip() for h in ws.row_values(1)]
+        if not headers:
+            ws.update(values=[field_order], range_name="A1")
+            headers = field_order
+        headers_lc = [h.lower() for h in headers]
+        rows_out = []
+        for item in items:
+            row = [_to_cell(item.get(col, "")) for col in headers_lc]
+            rows_out.append(row)
+        ws.append_rows(rows_out, value_input_option="USER_ENTERED")
+        return len(rows_out)
+
+    async def append_rows(
+        self, tab: str, field_order: list[str],
+        items: list[dict[str, Any]],
+    ) -> int:
+        return await asyncio.to_thread(
+            self._append_rows_sync, tab, field_order, items,
+        )
+
+    def _list_column_sync(self, tab: str, column: str) -> list[str]:
+        """Return the string values of one column (below the header row).
+        Returns [] if the tab or column doesn't exist."""
+        try:
+            ws = self._tab(tab)
+        except ValueError:
+            return []
+        headers = [h.strip().lower() for h in ws.row_values(1)]
+        col_lc = column.strip().lower()
+        if col_lc not in headers:
+            return []
+        col_idx = headers.index(col_lc) + 1  # gspread is 1-indexed
+        col_vals = ws.col_values(col_idx)
+        return [v for v in col_vals[1:] if v]
+
+    async def list_column(self, tab: str, column: str) -> list[str]:
+        return await asyncio.to_thread(self._list_column_sync, tab, column)
+
 
 def load_sheets_from_env() -> SheetsSync | None:
     """Return an initialized SheetsSync when the env has both a key path
