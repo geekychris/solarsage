@@ -426,6 +426,34 @@ async def historical_completion(
     }
 
 
+async def live_capacity_kwh(
+    history: History, serial: str, nominal_v: float = 51.2,
+) -> float | None:
+    """If EG4 is reporting a live pack capacity (fullCapacity in Ah, or a
+    per-unit variant), return the total energy capacity in kWh. Prefer
+    this over settings.battery_capacity_kwh which drifts when the user
+    grows the pack. Mirrors ``_capacity_kwh`` in the solar_vitals widget."""
+    known = await history.known_fields(serial)
+    for f in ("fullCapacity", "batFullCapacity"):
+        if f in known:
+            latest = await history.latest(serial, [f])
+            v = (latest.get(f) or {}).get("value")
+            if isinstance(v, (int, float)) and v > 0:
+                return v * nominal_v / 1000.0
+    unit_caps = sorted(
+        f for f in known
+        if f.startswith("unit") and f.endswith("_fullCapacity")
+    )
+    if unit_caps:
+        latest = await history.latest(serial, unit_caps)
+        total_ah = sum(
+            (row or {}).get("value") or 0 for row in latest.values()
+        )
+        if total_ah > 0:
+            return total_ah * nominal_v / 1000.0
+    return None
+
+
 async def current_charge_kw(history: History, serial: str) -> float:
     """Latest instantaneous charge power in kW. Prefers pCharge (the
     inverter's battery-into flow). Returns 0 if not currently charging."""
@@ -622,6 +650,19 @@ async def battery_completion(
             "current_soc_pct": cur_soc,
             "reason": "battery already full",
         }
+
+    # Prefer live-measured pack capacity — settings.battery_capacity_kwh
+    # drifts when the user grows the pack and would otherwise return an
+    # ETA off by the same multiple.
+    live_kwh = await live_capacity_kwh(history, serial)
+    if live_kwh and abs(live_kwh - loc.battery_capacity_kwh) / max(loc.battery_capacity_kwh, 1e-6) > 0.05:
+        loc = LocationConfig(
+            lat=loc.lat, lon=loc.lon,
+            tz_offset_minutes=loc.tz_offset_minutes,
+            peak_kw=loc.peak_kw,
+            battery_capacity_kwh=live_kwh,
+            max_charge_kw=loc.max_charge_kw,
+        )
 
     pv_field = await pick_field(history, serial, PV_FIELD_CANDIDATES)
     load_field = await pick_field(history, serial, LOAD_FIELD_CANDIDATES)
