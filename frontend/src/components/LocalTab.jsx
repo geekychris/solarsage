@@ -38,6 +38,7 @@ import TodoWidget from "./widgets/TodoWidget.jsx";
 import SubscriptionsWidget from "./widgets/SubscriptionsWidget.jsx";
 import SolarVitalsWidget from "./widgets/SolarVitalsWidget.jsx";
 import AcOverrideWidget from "./widgets/AcOverrideWidget.jsx";
+import SmartAcDecisionsWidget from "./widgets/SmartAcDecisionsWidget.jsx";
 import WaterTankWidget from "./widgets/WaterTankWidget.jsx";
 import SunsetWidget from "./widgets/SunsetWidget.jsx";
 import AcPvOverlayWidget from "./widgets/AcPvOverlayWidget.jsx";
@@ -90,6 +91,7 @@ const RENDERERS = {
   todo: TodoWidget,
   solar_vitals: SolarVitalsWidget,
   ac_override: AcOverrideWidget,
+  smart_ac_decisions: SmartAcDecisionsWidget,
   water_tank: WaterTankWidget,
   sunset: SunsetWidget,
   acpv_overlay: AcPvOverlayWidget,

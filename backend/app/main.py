@@ -95,6 +95,7 @@ from .widgets.costco_fuel import CostcoFuelWidget
 from .widgets.consumption_yoy import ConsumptionYoYWidget
 from .widgets.solar_vitals import SolarVitalsWidget
 from .widgets.ac_override import AcOverrideWidget
+from .widgets.smart_ac_decisions import SmartAcDecisionsWidget
 from .translations import TranslationsStore, mymemory_translate
 from .widgets.todo import TodoWidget
 from .sheets import SheetsSync, load_sheets_from_env
@@ -180,6 +181,7 @@ def _register_builtin_widgets() -> None:
         PropertyModeWidget(),
         SolarVitalsWidget(),
         AcOverrideWidget(),
+        SmartAcDecisionsWidget(),
         SolarExcessWidget(),
         PrecoolWidget(),
         ConsumptionYoYWidget(),

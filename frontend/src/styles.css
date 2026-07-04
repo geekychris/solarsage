@@ -1775,6 +1775,62 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
 .ac-override-modes button.active {
   background: rgba(108,209,255,0.2); border-color: #6cd1ff; color: #6cd1ff;
 }
+/* --- Smart AC decisions widget --- */
+.sad-summary {
+  display: flex; justify-content: space-between; align-items: baseline;
+  flex-wrap: wrap; gap: 8px; font-size: 12px; margin-bottom: 6px;
+}
+.sad-header, .sad-row {
+  display: grid;
+  grid-template-columns: 70px 120px 45px 1fr 1fr;
+  gap: 6px; align-items: center;
+  padding: 3px 4px; font-size: 11px;
+}
+.sad-header {
+  color: var(--muted, #8b97a8);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border, #232a35);
+  font-size: 10px;
+}
+.sad-row {
+  border-bottom: 1px solid rgba(35,42,53,0.5);
+  cursor: pointer;
+}
+.sad-row:hover { background: rgba(255,255,255,0.03); }
+.sad-row-action {
+  background: rgba(255,209,102,0.08);
+  border-left: 2px solid #ffd166;
+  padding-left: 2px;
+}
+.sad-row-action:hover { background: rgba(255,209,102,0.14); }
+.sad-time { font-family: monospace; }
+.sad-mode { font-weight: 600; font-size: 11px; }
+.sad-soc { text-align: right; font-family: monospace; }
+.sad-expanded {
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid var(--border, #232a35);
+  font-size: 12px;
+}
+.sad-metrics {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.sad-indoor {
+  color: var(--muted, #8b97a8); font-size: 11px; margin-bottom: 6px;
+}
+.sad-reasons { width: 100%; }
+.sad-reasons td {
+  padding: 2px 6px; vertical-align: top; font-size: 11px;
+  border-bottom: 1px dashed rgba(35,42,53,0.4);
+}
+.sad-room-on  { color: #ffd166; font-weight: 600; width: 90px; }
+.sad-room-off { color: var(--muted, #8b97a8); width: 90px; }
+.sad-reason   { color: #cbd0d8; }
+.sad-list {
+  max-height: 480px; overflow-y: auto;
+  border: 1px solid var(--border, #232a35); border-radius: 4px;
+}
 
 /* HA Integrations tab */
 .ha-card {
