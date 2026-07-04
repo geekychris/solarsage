@@ -180,7 +180,7 @@ function MoveControls({ widget, allTabs, onMove }) {
   );
 }
 
-function WidgetCard({ widget, tzOffsetMinutes, onRefreshed, allTabs, onMove }) {
+function WidgetCard({ widget, tzOffsetMinutes, onRefreshed, allTabs, onMove, editMode }) {
   const Renderer = RENDERERS[widget.meta.kind];
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -234,7 +234,9 @@ function WidgetCard({ widget, tzOffsetMinutes, onRefreshed, allTabs, onMove }) {
             className="widget-btn-link"
           >⤓</a>
           <button onClick={() => setSettingsOpen(true)} title="Settings">⚙</button>
-          <MoveControls widget={widget} allTabs={allTabs} onMove={onMove} />
+          {editMode && (
+            <MoveControls widget={widget} allTabs={allTabs} onMove={onMove} />
+          )}
         </div>
       </div>
       <div className="widget-body">
@@ -298,11 +300,24 @@ function WidgetCard({ widget, tzOffsetMinutes, onRefreshed, allTabs, onMove }) {
   );
 }
 
+const EDIT_MODE_KEY = "eg4.editMode";
+
 export default function LocalTab({ tzOffsetMinutes }) {
   const [widgets, setWidgets] = useState(null);
   const [err, setErr] = useState("");
   const [activeSubTab, setActiveSubTab] = useState(null);
   const [tabLabels, setTabLabels] = useState({});
+  const [editMode, setEditMode] = useState(
+    () => localStorage.getItem(EDIT_MODE_KEY) === "1",
+  );
+  function toggleEditMode() {
+    setEditMode((prev) => {
+      const next = !prev;
+      if (next) localStorage.setItem(EDIT_MODE_KEY, "1");
+      else localStorage.removeItem(EDIT_MODE_KEY);
+      return next;
+    });
+  }
 
   const load = useCallback(async () => {
     try {
@@ -427,7 +442,7 @@ export default function LocalTab({ tzOffsetMinutes }) {
   const widgetsInTab = byTab.get(active) || [];
 
   return (
-    <div className="local-wrap">
+    <div className={`local-wrap ${editMode ? "edit-mode" : ""}`}>
       <div className="local-subtabs">
         {tabs.map((t) => (
           <div
@@ -441,6 +456,17 @@ export default function LocalTab({ tzOffsetMinutes }) {
             </span>
           </div>
         ))}
+        <div style={{ flex: 1 }} />
+        <button
+          type="button"
+          className={`edit-mode-toggle ${editMode ? "active" : ""}`}
+          onClick={toggleEditMode}
+          title={editMode
+            ? "Hide widget move/resize controls"
+            : "Show controls to rearrange or resize widgets"}
+        >
+          {editMode ? "✓ Done" : "✎ Edit layout"}
+        </button>
       </div>
       <div className="local-grid">
         {widgetsInTab.map((w) => {
@@ -481,6 +507,7 @@ export default function LocalTab({ tzOffsetMinutes }) {
                 onRefreshed={load}
                 allTabs={tabs}
                 onMove={onMove}
+                editMode={editMode}
               />
             </div>
           );

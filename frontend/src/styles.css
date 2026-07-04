@@ -733,8 +733,27 @@ select, input {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+  align-items: center;
   border-bottom: 1px solid var(--border, #2a2f37);
   padding-bottom: 6px;
+}
+.edit-mode-toggle {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  border: 1px solid var(--border, #2a2f37);
+  background: rgba(255,255,255,0.03);
+  color: inherit; cursor: pointer;
+}
+.edit-mode-toggle.active {
+  background: rgba(255,209,102,0.18);
+  border-color: #ffd166;
+  color: #ffd166;
+}
+.local-wrap.edit-mode .local-grid {
+  outline: 1px dashed rgba(255,209,102,0.35);
+  outline-offset: 4px;
+  border-radius: 6px;
 }
 .local-subtab {
   padding: 4px 10px;
