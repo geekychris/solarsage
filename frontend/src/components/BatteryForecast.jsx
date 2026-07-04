@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   CartesianGrid,
+  Legend,
   Line,
   LineChart,
   ReferenceArea,
@@ -59,11 +60,26 @@ export default function BatteryForecast({ serial }) {
   if (err) return <div className="panel"><div className="error">{err}</div></div>;
   if (!data) return null;
 
-  const rows = (data.projection || []).map((p) => ({
-    ts: p.ts,
-    label: new Date(p.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    soc: p.soc_pct,
-  }));
+  // Merge all three projections onto a shared ts axis so recharts
+  // can plot them as separate lines.
+  const primary = data.projection || [];
+  const nowSeries = data.now_rate_projection?.series || [];
+  const wxSeries = data.weather_projection?.series || [];
+  const byTs = new Map();
+  for (const p of primary) {
+    byTs.set(p.ts, { ts: p.ts, soc: p.soc_pct });
+  }
+  for (const p of nowSeries) {
+    const row = byTs.get(p.ts) || { ts: p.ts };
+    row.now_soc = p.soc_pct;
+    byTs.set(p.ts, row);
+  }
+  for (const p of wxSeries) {
+    const row = byTs.get(p.ts) || { ts: p.ts };
+    row.wx_soc = p.soc_pct;
+    byTs.set(p.ts, row);
+  }
+  const rows = Array.from(byTs.values()).sort((a, b) => a.ts - b.ts);
 
   return (
     <div className="panel">
@@ -93,24 +109,53 @@ export default function BatteryForecast({ serial }) {
           </div>
         </div>
         <div className="forecast-tile">
-          <div className="label">Model ETA</div>
-          <div className="value" style={{ fontSize: 18 }}>{fmtETA(data.eta_iso)}</div>
+          <div className="label">At current W</div>
+          <div className="value" style={{ fontSize: 18 }}>
+            {fmtETA(data.now_rate_projection?.eta_iso)}
+          </div>
           <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
-            in {fmtDuration(data.minutes_remaining)} · {data.used_historical ? "hist curve" : "rate × time"}
+            {data.now_rate_projection?.minutes_remaining != null
+              ? `in ${fmtDuration(data.now_rate_projection.minutes_remaining)} · flat @ ${data.now_rate_projection.rate_kw} kW`
+              : "not charging"}
           </div>
         </div>
         <div className="forecast-tile">
-          <div className="label">Historical ETA</div>
+          <div className="label">Weather-aware</div>
           <div className="value" style={{ fontSize: 18 }}>
-            {fmtETA(data.historical_eta?.eta_iso)}
+            {fmtETA(data.weather_projection?.eta_iso)}
           </div>
           <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
-            {data.historical_eta?.matched_days > 0
-              ? `in ${fmtDuration(data.historical_eta.median_minutes_to_full)} (median of ${data.historical_eta.matched_days})`
-              : "no past day matched"}
+            {data.weather_projection?.minutes_remaining != null
+              ? `in ${fmtDuration(data.weather_projection.minutes_remaining)} · GHI × ${data.weather_projection.pv_per_ghi_w_per_wm2}`
+              : (data.weather_projection ? "won't hit 100% in 12h" : "unavailable")}
           </div>
         </div>
       </div>
+      <details style={{ marginTop: 6 }}>
+        <summary className="muted" style={{ fontSize: 12, cursor: "pointer" }}>
+          More: historical-median ETA + past-day matches
+        </summary>
+        <div className="forecast-tiles" style={{ marginTop: 8 }}>
+          <div className="forecast-tile">
+            <div className="label">Model ETA</div>
+            <div className="value" style={{ fontSize: 18 }}>{fmtETA(data.eta_iso)}</div>
+            <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+              in {fmtDuration(data.minutes_remaining)} · {data.used_historical ? "hist curve" : "rate × time"}
+            </div>
+          </div>
+          <div className="forecast-tile">
+            <div className="label">Historical median</div>
+            <div className="value" style={{ fontSize: 18 }}>
+              {fmtETA(data.historical_eta?.eta_iso)}
+            </div>
+            <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+              {data.historical_eta?.matched_days > 0
+                ? `in ${fmtDuration(data.historical_eta.median_minutes_to_full)} (median of ${data.historical_eta.matched_days})`
+                : "no past day matched"}
+            </div>
+          </div>
+        </div>
+      </details>
 
       {data.historical_eta?.matches?.length > 0 && (
         <details style={{ marginTop: 10 }}>
@@ -185,6 +230,11 @@ export default function BatteryForecast({ serial }) {
                   labelFormatter={fmtTimeOfDay}
                 />
                 <ReferenceLine y={100} stroke="#2ea043" strokeDasharray="3 3" />
+                <Legend
+                  verticalAlign="top"
+                  height={24}
+                  wrapperStyle={{ fontSize: 11, color: "#8b97a8" }}
+                />
                 {zoom.refArea && (
                   <ReferenceArea x1={zoom.refArea.x1} x2={zoom.refArea.x2} fill="#58a6ff" fillOpacity={0.15} />
                 )}
@@ -200,12 +250,35 @@ export default function BatteryForecast({ serial }) {
                 ))}
                 <Line
                   type="monotone"
-                  dataKey="soc"
-                  stroke="#58a6ff"
+                  dataKey="wx_soc"
+                  stroke="#3fb950"
                   strokeWidth={3}
                   dot={false}
                   isAnimationActive={false}
-                  name="Projected SoC"
+                  connectNulls
+                  name="Weather-aware"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="now_soc"
+                  stroke="#d29922"
+                  strokeWidth={2}
+                  strokeDasharray="4 3"
+                  dot={false}
+                  isAnimationActive={false}
+                  connectNulls
+                  name="At current W"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="soc"
+                  stroke="#58a6ff"
+                  strokeWidth={2}
+                  strokeOpacity={0.5}
+                  dot={false}
+                  isAnimationActive={false}
+                  connectNulls
+                  name="Model (hist curve)"
                 />
               </LineChart>
             </ResponsiveContainer>

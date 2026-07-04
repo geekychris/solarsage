@@ -493,6 +493,7 @@ class SolarVitalsWidget(Widget):
 
         # -------- Projections (using ACTUAL capacity + charge rate) --------
         projection: dict[str, Any] | None = None
+        weather_projection: dict[str, Any] | None = None
         if soc_v is not None and state != "steady":
             if state == "charging" and soc_v < 100 and charge_kw > 0.05:
                 remaining_kwh = ((100 - soc_v) / 100.0) * capacity_kwh
@@ -505,7 +506,46 @@ class SolarVitalsWidget(Widget):
                     "pretty": _fmt_hours_minutes(hours),
                     "target_at": _target_time_iso(hours),
                     "target_soc": 100,
+                    "method": "now-rate",
                 }
+                # Second forecast: curve-aware using Open-Meteo GHI so the
+                # midmorning "still ramping" case doesn't over-estimate.
+                try:
+                    from ..forecast import (
+                        LocationConfig,
+                        weather_aware_projection as _wap,
+                    )
+                    from ..storage import History
+                    settings_lat = float(await _read_setting(db_path, "lat", 31.025) or 31.025)
+                    settings_lon = float(await _read_setting(db_path, "lon", -114.838) or -114.838)
+                    settings_peak = float(await _read_setting(db_path, "peak_kw", 10.0) or 10.0)
+                    settings_maxc = float(await _read_setting(db_path, "max_charge_kw", 8.0) or 8.0)
+                    from datetime import datetime as _dt
+                    tz_off = int(
+                        _dt.now().astimezone().utcoffset().total_seconds() / 60,
+                    )
+                    loc = LocationConfig(
+                        lat=settings_lat, lon=settings_lon,
+                        tz_offset_minutes=tz_off,
+                        peak_kw=settings_peak,
+                        battery_capacity_kwh=capacity_kwh,
+                        max_charge_kw=settings_maxc,
+                    )
+                    wp = await _wap(History(db_path), serial, loc, soc_v)
+                    if wp and wp.get("minutes_remaining") is not None:
+                        wp_hours = wp["minutes_remaining"] / 60
+                        weather_projection = {
+                            "direction": "charging",
+                            "hours": round(wp_hours, 2),
+                            "pretty": _fmt_hours_minutes(wp_hours),
+                            "target_at": wp["eta_iso"],
+                            "target_soc": 100,
+                            "pv_per_ghi_w_per_wm2":
+                                wp.get("pv_per_ghi_w_per_wm2"),
+                            "method": "weather-aware",
+                        }
+                except Exception:  # noqa: BLE001
+                    weather_projection = None
             elif state == "discharging" and soc_v > 0 and discharge_kw > 0.05:
                 remaining_kwh = (soc_v / 100.0) * capacity_kwh
                 hours = remaining_kwh / discharge_kw
@@ -744,6 +784,7 @@ class SolarVitalsWidget(Widget):
                 "from_grid_kw": round((to_user_w or 0) / 1000, 2),
             },
             "projection": projection,
+            "weather_projection": weather_projection,
             "cut_back": cut_back,
             "today": today,
             "fields_used": {

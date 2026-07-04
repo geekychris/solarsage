@@ -510,6 +510,7 @@ export default function SolarVitalsWidget({ data, onChanged }) {
   const l = data.load || {};
   const bf = data.battery_flow || {};
   const p = data.projection;
+  const wp = data.weather_projection;
   const cb = data.cut_back;
   const today = data.today || {};
 
@@ -579,12 +580,26 @@ export default function SolarVitalsWidget({ data, onChanged }) {
 
       {p && (
         <div className={`sv-projection sv-${p.direction}`}>
-          {p.direction === "charging" ? "🔌 Full" : "🪫 Empty"} in{" "}
-          <strong>{p.pretty}</strong>
-          <span className="muted"> at {formatClock(p.target_at)}</span>
-          <span className="muted" style={{ marginLeft: 8 }}>
-            · {p.remaining_kwh} kWh remaining at {p.rate_kw} kW
-          </span>
+          <div>
+            {p.direction === "charging" ? "🔌 Full" : "🪫 Empty"} in{" "}
+            <strong>{p.pretty}</strong>
+            <span className="muted"> at {formatClock(p.target_at)}</span>
+            <span className="muted" style={{ marginLeft: 8 }}>
+              · at current {p.rate_kw} kW
+            </span>
+          </div>
+          {wp && p.direction === "charging" && (
+            <div style={{ marginTop: 4, fontSize: 13 }}>
+              <span style={{ color: "#3fb950" }}>🌤 Weather-aware:</span>{" "}
+              <strong>{wp.pretty}</strong>
+              <span className="muted"> at {formatClock(wp.target_at)}</span>
+              {wp.pv_per_ghi_w_per_wm2 && (
+                <span className="muted" style={{ marginLeft: 8, fontSize: 11 }}>
+                  · GHI × {wp.pv_per_ghi_w_per_wm2}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
       {cb && (

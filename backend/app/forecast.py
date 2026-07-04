@@ -23,6 +23,7 @@ from typing import Optional
 
 from .solar import clearsky_power_w
 from .storage import History
+from . import weather as weather_api
 
 BUCKET_MIN = 15
 BUCKETS_PER_DAY = 24 * 60 // BUCKET_MIN  # 96
@@ -425,6 +426,181 @@ async def historical_completion(
     }
 
 
+async def current_charge_kw(history: History, serial: str) -> float:
+    """Latest instantaneous charge power in kW. Prefers pCharge (the
+    inverter's battery-into flow). Returns 0 if not currently charging."""
+    known = await history.known_fields(serial)
+    for f in ("pCharge", "batChargePower"):
+        if f in known:
+            latest = await history.latest(serial, [f])
+            v = (latest.get(f) or {}).get("value")
+            if isinstance(v, (int, float)) and v > 0:
+                return v / 1000.0
+    return 0.0
+
+
+def _extrapolate_now_rate(
+    start_soc: float, rate_kw: float, capacity_kwh: float,
+    tz_offset_min: int, step_min: int = 5, horizon_min: int = 12 * 60,
+) -> dict | None:
+    """Hold the current charge rate flat and project to 100%.
+
+    Represents the "if things stay exactly as they are right now" view — the
+    misleading-at-midmorning case the user asked about, kept as one of the
+    two forecasts so the divergence between it and the curve-aware view is
+    visible."""
+    if rate_kw <= 0.05 or start_soc >= 99.5:
+        return None
+    remaining_kwh = ((100 - start_soc) / 100.0) * capacity_kwh
+    hours = remaining_kwh / rate_kw
+    now_local = _now_local(tz_offset_min)
+    eta_local = now_local + timedelta(hours=hours)
+    steps = min(horizon_min // step_min, int(hours * 60 / step_min) + 1)
+    series = [
+        {"ts": int(now_local.astimezone(timezone.utc).timestamp() * 1000),
+         "soc_pct": round(start_soc, 2)},
+    ]
+    per_step_pct = (rate_kw * (step_min / 60) / capacity_kwh) * 100
+    soc = start_soc
+    for step in range(1, steps + 1):
+        soc = min(100.0, soc + per_step_pct)
+        t = now_local + timedelta(minutes=step * step_min)
+        series.append({
+            "ts": int(t.astimezone(timezone.utc).timestamp() * 1000),
+            "soc_pct": round(soc, 2),
+        })
+        if soc >= 100.0:
+            break
+    return {
+        "rate_kw": round(rate_kw, 2),
+        "series": series,
+        "eta_iso": eta_local.isoformat(),
+        "minutes_remaining": int(hours * 60),
+    }
+
+
+async def weather_aware_projection(
+    history: History, serial: str, loc: LocationConfig,
+    start_soc: float, hist_load: dict[int, float] | None = None,
+    step_min: int = 5, horizon_min: int = 12 * 60,
+) -> dict | None:
+    """Project SoC using Open-Meteo GHI forecast × system's PV-per-GHI ratio.
+
+    Calibration copies the pattern in ``/api/forecast/tomorrow`` — take the
+    peak observed PV vs the peak forecast GHI over the next 48h. Falls back
+    to ``peak_kw × 0.8`` when there isn't enough history. Load model reuses
+    the same 7-day bucketed avg the historical projection uses.
+    """
+    try:
+        wx = await weather_api.forecast(loc.lat, loc.lon, days=2, tz="auto")
+    except Exception:
+        return None
+    hourly = wx.get("hourly") or {}
+    times_iso = hourly.get("time") or []
+    ghis = hourly.get("shortwave_radiation") or []
+    if not times_iso or not ghis or len(times_iso) != len(ghis):
+        return None
+    tz = timezone(timedelta(minutes=loc.tz_offset_minutes))
+    hour_ts_ms: list[int] = []
+    for s in times_iso:
+        try:
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=tz)
+            hour_ts_ms.append(int(dt.timestamp() * 1000))
+        except ValueError:
+            hour_ts_ms.append(0)
+
+    if hist_load is None:
+        load_field = await pick_field(history, serial, LOAD_FIELD_CANDIDATES)
+        hist_load = (
+            await historical_curve(history, serial, load_field, loc)
+            if load_field else {}
+        )
+
+    # PV per GHI calibration
+    pv_field = await pick_field(history, serial, PV_FIELD_CANDIDATES)
+    pv_per_ghi: float | None = None
+    if pv_field:
+        try:
+            pv_max_by_hour = await history.bucket_max_by_time_of_day(
+                serial, pv_field, days=14, bucket_minutes=60,
+                tz_offset_minutes=loc.tz_offset_minutes,
+            )
+            peak_pv = max(pv_max_by_hour.values(), default=0.0)
+            peak_ghi = max(ghis[:48] or [0])
+            if peak_pv > 0 and peak_ghi > 100:
+                pv_per_ghi = peak_pv / peak_ghi
+        except Exception:
+            pass
+    if pv_per_ghi is None:
+        # Fallback: rated peak with 20% derate for temp/tilt/wire losses
+        pv_per_ghi = loc.peak_kw * 0.8
+
+    now_local = _now_local(loc.tz_offset_minutes)
+
+    def _ghi_at(ts_ms: int) -> float:
+        if not hour_ts_ms:
+            return 0.0
+        idx = None
+        for i, h_ts in enumerate(hour_ts_ms):
+            if h_ts <= ts_ms:
+                idx = i
+            else:
+                break
+        if idx is None:
+            return float(ghis[0] or 0.0)
+        if idx + 1 >= len(hour_ts_ms):
+            return float(ghis[idx] or 0.0)
+        t0, t1 = hour_ts_ms[idx], hour_ts_ms[idx + 1]
+        g0 = float(ghis[idx] or 0.0)
+        g1 = float(ghis[idx + 1] or 0.0)
+        if t1 == t0:
+            return g0
+        frac = max(0.0, min(1.0, (ts_ms - t0) / (t1 - t0)))
+        return g0 + (g1 - g0) * frac
+
+    soc = start_soc
+    now_ms = int(now_local.astimezone(timezone.utc).timestamp() * 1000)
+    series = [{"ts": now_ms, "soc_pct": round(soc, 2)}]
+    eta_local: datetime | None = None
+    for step in range(1, horizon_min // step_min + 1):
+        t_local = now_local + timedelta(minutes=step * step_min)
+        ts_ms = int(t_local.astimezone(timezone.utc).timestamp() * 1000)
+        bucket = ((t_local.hour * 60 + t_local.minute) // BUCKET_MIN) * BUCKET_MIN
+        ghi_w = _ghi_at(ts_ms)
+        pv_w = ghi_w * pv_per_ghi
+        load_w = hist_load.get(bucket, 0.0) if hist_load else 0.0
+        net_w = pv_w - load_w
+        net_w = max(
+            -loc.max_charge_kw * 1000,
+            min(loc.max_charge_kw * 1000, net_w),
+        )
+        kwh_in = net_w * (step_min / 60) / 1000
+        delta_pct = (kwh_in / loc.battery_capacity_kwh) * 100
+        soc = max(0.0, min(100.0, soc + delta_pct))
+        series.append({
+            "ts": ts_ms,
+            "soc_pct": round(soc, 2),
+            "pv_w": round(pv_w),
+            "ghi_wm2": round(ghi_w),
+        })
+        if soc >= 100.0 and eta_local is None:
+            eta_local = t_local
+            break
+
+    return {
+        "series": series,
+        "eta_iso": eta_local.isoformat() if eta_local else None,
+        "minutes_remaining": (
+            int((eta_local - now_local).total_seconds() / 60)
+            if eta_local else None
+        ),
+        "pv_per_ghi_w_per_wm2": round(pv_per_ghi, 3),
+        "weather_source": "open-meteo",
+    }
+
+
 async def battery_completion(
     history: History, serial: str, loc: LocationConfig
 ) -> dict:
@@ -501,6 +677,18 @@ async def battery_completion(
 
     historical = await historical_completion(history, serial, loc, cur_soc, now_local)
 
+    # Two side-by-side "when-will-it-be-full" projections. The chart
+    # renders both so the divergence between them is visible.
+    charge_kw = await current_charge_kw(history, serial)
+    now_rate = _extrapolate_now_rate(
+        cur_soc, charge_kw, loc.battery_capacity_kwh,
+        loc.tz_offset_minutes, step_min=step_min, horizon_min=horizon_min,
+    )
+    weather_aware = await weather_aware_projection(
+        history, serial, loc, cur_soc, hist_load,
+        step_min=step_min, horizon_min=horizon_min,
+    )
+
     return {
         "current_soc_pct": round(cur_soc, 2),
         "measured_rate_pct_per_min": measured_rate,
@@ -512,4 +700,7 @@ async def battery_completion(
         "projection": projection,
         "used_historical": bool(hist_pv),
         "historical_eta": historical,
+        # NEW — the two forecasts the user asked for
+        "now_rate_projection": now_rate,
+        "weather_projection": weather_aware,
     }
