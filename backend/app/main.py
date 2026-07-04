@@ -94,6 +94,7 @@ from .widgets.spanish import SpanishWidget
 from .widgets.costco_fuel import CostcoFuelWidget
 from .widgets.consumption_yoy import ConsumptionYoYWidget
 from .widgets.solar_vitals import SolarVitalsWidget
+from .widgets.ac_override import AcOverrideWidget
 from .translations import TranslationsStore, mymemory_translate
 from .widgets.todo import TodoWidget
 from .sheets import SheetsSync, load_sheets_from_env
@@ -178,6 +179,7 @@ def _register_builtin_widgets() -> None:
         # Solar synergy
         PropertyModeWidget(),
         SolarVitalsWidget(),
+        AcOverrideWidget(),
         SolarExcessWidget(),
         PrecoolWidget(),
         ConsumptionYoYWidget(),
@@ -3165,12 +3167,16 @@ async def smart_ac_override(
     _: Session | None = Depends(require_read),
 ):
     """Body: ``{"room": "living", "state": "on"|"off",
-    "duration_minutes": 60}``. Calls Home Assistant to flip
-    ``input_boolean.ac_<room>`` and (when duration > 0) sets
+    "duration_minutes": 60}`` OR ``{..., "until": "YYYY-MM-DD HH:MM:SS"}``.
+    Calls Home Assistant to flip ``input_boolean.ac_<room>`` and pins
     ``input_datetime.ac_<room>_override_until`` so the smart_ac
-    scheduler leaves the room alone until that time. duration=0
-    (or missing) clears any existing override so the scheduler
-    resumes control on its next 5-min tick.
+    scheduler leaves the room alone until that time.
+
+    * ``duration_minutes > 0``: pin until (now + N minutes). Cap 10 days
+      so the scheduler can never be pinned indefinitely by accident.
+    * ``until``: absolute local-time datetime. Same 10-day cap.
+    * both missing / duration=0 / until in the past: clears any existing
+      override so the scheduler resumes control on its next 5-min tick.
 
     See ~/code/claude_world/homeassistant for the scheduler that
     reads these entities.
@@ -3178,6 +3184,7 @@ async def smart_ac_override(
     room = str(body.get("room") or "").strip().lower()
     state = str(body.get("state") or "").strip().lower()
     duration = int(body.get("duration_minutes") or 0)
+    until_raw = str(body.get("until") or "").strip()
 
     if room not in SMART_AC_ROOMS:
         raise HTTPException(
@@ -3186,9 +3193,11 @@ async def smart_ac_override(
         )
     if state not in ("on", "off"):
         raise HTTPException(status_code=400, detail="state must be 'on' or 'off'")
-    if duration < 0 or duration > 24 * 60:
+    max_minutes = 10 * 24 * 60  # 10 days
+    if duration < 0 or duration > max_minutes:
         raise HTTPException(
-            status_code=400, detail="duration_minutes must be 0..1440",
+            status_code=400,
+            detail=f"duration_minutes must be 0..{max_minutes}",
         )
 
     ha_url = os.getenv("HA_URL", "").rstrip("/")
@@ -3221,12 +3230,37 @@ async def smart_ac_override(
                 )
 
         # 2. Set / clear the override datetime
-        if duration > 0:
-            until = datetime.now().astimezone() + timedelta(minutes=duration)
+        until: datetime | None = None
+        now_local = datetime.now().astimezone()
+        if until_raw:
+            # Accept ISO ("2026-07-04T14:00") or "YYYY-MM-DD HH:MM[:SS]".
+            # datetime.fromisoformat handles both since 3.11.
+            parsed: datetime | None = None
+            try:
+                parsed = datetime.fromisoformat(until_raw.replace("T", " "))
+            except ValueError:
+                pass
+            if parsed is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"until must be ISO datetime, got {until_raw!r}",
+                )
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=now_local.tzinfo)
+            if parsed > now_local + timedelta(minutes=max_minutes):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"until is more than {max_minutes // 1440} days out",
+                )
+            if parsed > now_local:
+                until = parsed
+        elif duration > 0:
+            until = now_local + timedelta(minutes=duration)
+
+        if until is not None:
             dt_str = until.strftime("%Y-%m-%d %H:%M:%S")
         else:
             dt_str = "1970-01-01 00:00:00"
-            until = None
         async with http.post(
             f"{ha_url}/api/services/input_datetime/set_datetime",
             json={"entity_id": dt_eid, "datetime": dt_str},

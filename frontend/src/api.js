@@ -315,11 +315,14 @@ export const api = {
       method: "POST",
       body: { source },
     }),
-  // Smart AC override (delegates to Home Assistant)
-  smartAcOverride: ({ room, state, duration_minutes = 0 }) =>
+  // Smart AC override (delegates to Home Assistant). Pass either
+  // ``duration_minutes`` (relative window) OR ``until`` (absolute
+  // "YYYY-MM-DD HH:MM[:SS]" or ISO). If both are omitted or duration=0,
+  // any existing override is cleared and the scheduler resumes control.
+  smartAcOverride: ({ room, state, duration_minutes = 0, until }) =>
     request("/api/smart_ac/override", {
       method: "POST",
-      body: { room, state, duration_minutes },
+      body: until ? { room, state, until } : { room, state, duration_minutes },
     }),
   // DAB water-pump control (Sleep / Power-Shower / enable-disable)
   dabPumpControl: ({ action, value }) =>
