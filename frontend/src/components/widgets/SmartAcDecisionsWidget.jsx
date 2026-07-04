@@ -35,7 +35,15 @@ function fmtDateTime(iso) {
 function fmtActions(actions) {
   if (!actions || actions.length === 0) return "—";
   return actions
-    .map((a) => `${a.action} ${a.room}`)
+    .map((a) => {
+      if (typeof a === "string") {
+        // "room:turn_on" / "room:turn_off"
+        const [room, action] = a.split(":");
+        const verb = (action || "").replace(/^turn_/, "").toUpperCase();
+        return `${verb || action || "?"} ${room || ""}`.trim();
+      }
+      return `${a.action || "?"} ${a.room || ""}`.trim();
+    })
     .join(", ");
 }
 
