@@ -1,10 +1,18 @@
-import React from "react";
+import React, { useState } from "react";
+import PdfModal from "../PdfModal.jsx";
 
-function PdfLink({ link, label }) {
+function PdfLink({ link, label, onOpen }) {
   if (!link) return null;
   return (
     <div style={{ marginBottom: 6 }}>
-      <a href={link.url} target="_blank" rel="noreferrer" className="hoa-pdf">
+      <a
+        href={link.url}
+        className="hoa-pdf"
+        onClick={(e) => {
+          e.preventDefault();
+          onOpen(link);
+        }}
+      >
         {label}: {link.label}
       </a>
     </div>
@@ -12,12 +20,13 @@ function PdfLink({ link, label }) {
 }
 
 export default function HoaWidget({ data }) {
+  const [openPdf, setOpenPdf] = useState(null);
   if (!data) return <div className="muted">No HOA data yet.</div>;
   const { monthly_pdf, weekly_pdf, all_pdfs, announcements, url } = data;
   return (
     <div className="hoa">
-      <PdfLink link={monthly_pdf} label="This month" />
-      <PdfLink link={weekly_pdf} label="This week" />
+      <PdfLink link={monthly_pdf} label="This month" onOpen={setOpenPdf} />
+      <PdfLink link={weekly_pdf} label="This week" onOpen={setOpenPdf} />
 
       {announcements && announcements.length > 0 && (
         <div style={{ marginTop: 8 }}>
@@ -38,7 +47,13 @@ export default function HoaWidget({ data }) {
           <ul style={{ marginTop: 6 }}>
             {all_pdfs.map((p, i) => (
               <li key={i}>
-                <a href={p.url} target="_blank" rel="noreferrer">
+                <a
+                  href={p.url}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setOpenPdf(p);
+                  }}
+                >
                   {p.label}
                 </a>
               </li>
@@ -53,6 +68,14 @@ export default function HoaWidget({ data }) {
           eldoradoranchhoa.com.mx
         </a>
       </div>
+
+      {openPdf && (
+        <PdfModal
+          url={openPdf.url}
+          label={openPdf.label}
+          onClose={() => setOpenPdf(null)}
+        />
+      )}
     </div>
   );
 }
