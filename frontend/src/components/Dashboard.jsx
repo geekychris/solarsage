@@ -16,6 +16,7 @@ import AppliancesPanel from "./AppliancesPanel.jsx";
 import SchedulerPanel from "./SchedulerPanel.jsx";
 import Heatmap from "./Heatmap.jsx";
 import AlertsPanel from "./AlertsPanel.jsx";
+import IframeModal from "./IframeModal.jsx";
 import HealthPanel from "./HealthPanel.jsx";
 import NetworkPanel from "./NetworkPanel.jsx";
 import LocalTab from "./LocalTab.jsx";
@@ -32,6 +33,7 @@ export default function Dashboard({ session, onLoggedOut, onSignIn, onSwitchMobi
   const [settingsBump, setSettingsBump] = useState(0);
   const [tzOffsetMinutes, setTzOffsetMinutes] = useState(null);
   const [haUiUrl, setHaUiUrl] = useState(null);
+  const [haEmbedOpen, setHaEmbedOpen] = useState(false);
   // Single-site for now — multi-site UI removed pending real implementation
   const siteId = "site-1";
   const [topTab, setTopTab] = useState(session?.guest ? "home" : "eg4");
@@ -140,13 +142,12 @@ export default function Dashboard({ session, onLoggedOut, onSignIn, onSwitchMobi
             <button onClick={onEnterRotation} title="Enter fullscreen rotation">📺 Rotate</button>
           )}
           {haUiUrl && (
-            <a
-              href={haUiUrl}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
               className="topbar-ha-link"
-              title="Open Home Assistant"
-            >🏠 HA ↗</a>
+              title="Open Home Assistant (opens inside SolarSage — Esc or Back to return)"
+              onClick={() => setHaEmbedOpen(true)}
+            >🏠 HA</button>
           )}
           {onToggleTheme && (
             <button
@@ -309,6 +310,18 @@ export default function Dashboard({ session, onLoggedOut, onSignIn, onSwitchMobi
         onClose={() => setSettingsOpen(false)}
         onSaved={() => setSettingsBump((n) => n + 1)}
       />
+      {haEmbedOpen && haUiUrl && (
+        <IframeModal
+          url={haUiUrl}
+          label="Home Assistant"
+          onClose={() => setHaEmbedOpen(false)}
+          embedHint={
+            "If the page below is blank, HA is refusing to be embedded " +
+            "(X-Frame-Options). Use the ← Back to SolarSage button or " +
+            "press Esc; on a non-kiosk browser 'Open in tab' works too."
+          }
+        />
+      )}
     </div>
   );
 }

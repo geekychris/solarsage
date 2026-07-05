@@ -1,9 +1,11 @@
 import React, { useState, useCallback } from "react";
 import { api } from "../../api.js";
+import IframeModal from "../IframeModal.jsx";
 
 export default function PropertyModeWidget({ data, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [haEmbedOpen, setHaEmbedOpen] = useState(false);
 
   const setOccupied = useCallback(async (occupied) => {
     setBusy(true); setErr("");
@@ -65,15 +67,28 @@ export default function PropertyModeWidget({ data, onChanged }) {
 
       {data.ha_ui_url && (
         <div style={{ marginTop: 4 }}>
-          <a
-            href={data.ha_ui_url}
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
             className="property-mode-ha-link"
+            onClick={() => setHaEmbedOpen(true)}
+            title="Open HA embedded (Esc or Back to return)"
           >
-            Open Home Assistant ↗
-          </a>
+            Open Home Assistant
+          </button>
         </div>
+      )}
+
+      {haEmbedOpen && data.ha_ui_url && (
+        <IframeModal
+          url={data.ha_ui_url}
+          label="Home Assistant"
+          onClose={() => setHaEmbedOpen(false)}
+          embedHint={
+            "If the page below is blank, HA blocks iframe embedding. " +
+            "Use ← Back to SolarSage or Esc to return; on a non-kiosk " +
+            "browser 'Open in tab' works too."
+          }
+        />
       )}
     </div>
   );

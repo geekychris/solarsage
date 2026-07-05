@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import PdfModal from "../PdfModal.jsx";
+import IframeModal from "../IframeModal.jsx";
 
 function PdfLink({ link, label, onOpen }) {
   if (!link) return null;
@@ -70,7 +70,7 @@ export default function HoaWidget({ data }) {
       </div>
 
       {openPdf && (
-        <PdfModal
+        <IframeModal
           url={openPdf.url}
           label={openPdf.label}
           onClose={() => setOpenPdf(null)}
