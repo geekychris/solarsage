@@ -1244,6 +1244,65 @@ select, input {
 .mode-occupied { border-left-color: #6fdc8c; }
 .mode-vacant   { border-left-color: #888; }
 .mode-arriving { border-left-color: #ffd166; }
+.property-mode-toggle {
+  display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap;
+}
+.property-mode-toggle button {
+  padding: 4px 10px; font-size: 12px;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(255,255,255,0.03);
+  color: inherit; cursor: pointer; border-radius: 4px;
+}
+.property-mode-toggle button:hover:not(:disabled) {
+  border-color: #6cd1ff; color: #6cd1ff;
+}
+.property-mode-toggle button.active {
+  background: rgba(108,209,255,0.18);
+  border-color: #6cd1ff;
+  color: #6cd1ff;
+  font-weight: 600;
+}
+.property-mode-toggle button:disabled { opacity: 0.4; cursor: default; }
+.property-mode-edit {
+  padding: 2px 8px; font-size: 11px;
+  border: 1px solid var(--border, #232a35);
+  background: transparent; color: var(--muted, #888);
+  cursor: pointer; border-radius: 3px;
+}
+.property-mode-edit:hover:not(:disabled) {
+  color: #6cd1ff; border-color: #6cd1ff;
+}
+.property-mode-editor {
+  margin-top: 8px; padding: 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border, #232a35);
+  border-radius: 4px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.property-mode-editor label {
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 11px; color: var(--muted, #888);
+}
+.property-mode-editor input {
+  padding: 4px 8px; font-size: 12px;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(255,255,255,0.03);
+  color: inherit; border-radius: 3px;
+}
+.property-mode-editor-actions {
+  display: flex; gap: 6px; justify-content: flex-end;
+}
+.property-mode-editor-actions button {
+  padding: 4px 12px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(255,255,255,0.03); color: inherit;
+  border-radius: 3px;
+}
+.property-mode-editor-actions button.primary {
+  background: rgba(108,209,255,0.15); color: #6cd1ff;
+  border-color: #6cd1ff;
+}
+.property-mode-editor-actions button:disabled { opacity: 0.4; cursor: default; }
 
 /* Trip planner */
 .trip { display: flex; flex-direction: column; gap: 10px; }
