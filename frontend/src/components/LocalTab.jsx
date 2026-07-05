@@ -35,6 +35,7 @@ import SpanishWidget from "./widgets/SpanishWidget.jsx";
 import CostcoFuelWidget from "./widgets/CostcoFuelWidget.jsx";
 import ConsumptionYoYWidget from "./widgets/ConsumptionYoYWidget.jsx";
 import TodoWidget from "./widgets/TodoWidget.jsx";
+import ProjectsWidget from "./widgets/ProjectsWidget.jsx";
 import SubscriptionsWidget from "./widgets/SubscriptionsWidget.jsx";
 import SolarVitalsWidget from "./widgets/SolarVitalsWidget.jsx";
 import AcOverrideWidget from "./widgets/AcOverrideWidget.jsx";
@@ -89,6 +90,7 @@ const RENDERERS = {
   costco_fuel: CostcoFuelWidget,
   consumption_yoy: ConsumptionYoYWidget,
   todo: TodoWidget,
+  projects: ProjectsWidget,
   solar_vitals: SolarVitalsWidget,
   ac_override: AcOverrideWidget,
   smart_ac_decisions: SmartAcDecisionsWidget,

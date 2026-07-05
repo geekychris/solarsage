@@ -2688,6 +2688,90 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
 .pri-5 { background: rgba(136,136,136,0.15); color: #888; }
 .todo-due { color: var(--muted, #888); }
 
+/* --- Projects widget --- */
+.proj { display: flex; flex-direction: column; gap: 8px; }
+.proj-stats { display: flex; gap: 8px; align-items: center; font-size: 12px; flex-wrap: wrap; }
+.proj-overdue-badge {
+  padding: 1px 6px; border-radius: 8px;
+  background: rgba(239,111,108,0.15); color: #ef6f6c;
+  font-weight: 600; font-size: 11px;
+}
+.proj-add {
+  display: grid;
+  grid-template-columns: 1.5fr 2fr 0.8fr 1fr 130px auto;
+  gap: 4px;
+}
+.proj-add input {
+  padding: 4px 8px; font-size: 12px;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(255,255,255,0.03);
+  color: inherit; border-radius: 3px;
+  min-width: 0;
+}
+.proj-add button {
+  padding: 4px 10px; font-size: 13px;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(108,209,255,0.15); color: #6cd1ff;
+  cursor: pointer; border-radius: 3px;
+}
+.proj-add button:disabled { opacity: 0.4; cursor: default; }
+@media (max-width: 720px) {
+  .proj-add { grid-template-columns: 1fr 1fr; }
+  .proj-add > * { grid-column: span 2; }
+  .proj-add button { grid-column: span 2; }
+}
+.proj-list { display: flex; flex-direction: column; gap: 6px; }
+.proj-group {
+  border: 1px solid var(--border, #232a35);
+  border-radius: 5px;
+  background: rgba(255,255,255,0.02);
+}
+.proj-group.all-done { opacity: 0.6; }
+.proj-group-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; cursor: pointer; flex-wrap: wrap;
+  font-size: 13px;
+  border-bottom: 1px solid transparent;
+}
+.proj-group-head:hover { background: rgba(255,255,255,0.03); }
+.proj-group-toggle { color: var(--muted, #888); width: 12px; }
+.proj-group-name { font-weight: 600; }
+.proj-group-progress {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px; color: var(--muted, #888);
+}
+.proj-group-cost {
+  font-size: 11px; padding: 1px 6px; border-radius: 8px;
+  background: rgba(111,220,140,0.12); color: #6fdc8c;
+}
+.proj-group-due { font-size: 11px; color: var(--muted, #888); }
+.proj-group-assignees { font-size: 11px; margin-left: auto; }
+.proj-item-list {
+  padding: 4px 6px 8px 6px;
+  border-top: 1px solid rgba(35,42,53,0.6);
+}
+.proj-item {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 6px;
+  align-items: center; padding: 4px 6px;
+  border-radius: 3px;
+  border-left: 3px solid transparent;
+}
+.proj-item.done { opacity: 0.55; }
+.proj-item.done .proj-item-text { text-decoration: line-through; }
+.proj-item.overdue { border-left-color: #ef6f6c; }
+.proj-item-text { font-size: 13px; }
+.proj-item-meta {
+  display: flex; gap: 8px; font-size: 11px;
+  margin-top: 2px; flex-wrap: wrap;
+}
+.proj-cost {
+  padding: 1px 5px; border-radius: 8px;
+  background: rgba(111,220,140,0.15); color: #6fdc8c;
+  font-weight: 600;
+}
+.proj-assignee { color: #ffd166; }
+.proj-due { color: var(--muted, #888); }
+
 /* Print / Save-as-PDF: light theme, full-width, no clipped charts. */
 @media print {
   @page {

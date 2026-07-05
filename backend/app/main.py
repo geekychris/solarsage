@@ -98,6 +98,7 @@ from .widgets.ac_override import AcOverrideWidget
 from .widgets.smart_ac_decisions import SmartAcDecisionsWidget
 from .translations import TranslationsStore, mymemory_translate
 from .widgets.todo import TodoWidget
+from .widgets.projects import ProjectsWidget
 from .sheets import SheetsSync, load_sheets_from_env
 from .news_store import NewsStore
 from .events import EventStore, run_reminder_scheduler
@@ -208,6 +209,7 @@ def _register_builtin_widgets() -> None:
         PropertyTaxWidget(),
         ContactsWidget(),
         TodoWidget(),
+        ProjectsWidget(),
         SpanishWidget(),
     ):
         if widget_registry.get(widget.id) is None:
