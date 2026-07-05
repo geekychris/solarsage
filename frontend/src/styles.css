@@ -2696,29 +2696,91 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
   background: rgba(239,111,108,0.15); color: #ef6f6c;
   font-weight: 600; font-size: 11px;
 }
-.proj-add {
-  display: grid;
-  grid-template-columns: 1.5fr 2fr 0.8fr 1fr 130px auto;
-  gap: 4px;
+/* --- New / edit project inline forms --- */
+.proj-new, .proj-edit {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px; border: 1px solid #6cd1ff;
+  border-radius: 5px; background: rgba(108,209,255,0.06);
 }
-.proj-add input {
-  padding: 4px 8px; font-size: 12px;
-  border: 1px solid var(--border, #232a35);
-  background: rgba(255,255,255,0.03);
-  color: inherit; border-radius: 3px;
-  min-width: 0;
+.proj-edit-title { font-weight: 600; font-size: 13px; }
+.proj-new-row {
+  display: grid; grid-template-columns: 2fr 1.4fr 140px; gap: 6px;
 }
-.proj-add button {
-  padding: 4px 10px; font-size: 13px;
+.proj-new-row input, .proj-new textarea, .proj-edit textarea {
+  padding: 5px 8px; font-size: 12px;
   border: 1px solid var(--border, #232a35);
+  background: rgba(255,255,255,0.03); color: inherit;
+  border-radius: 3px; min-width: 0;
+}
+.proj-new textarea, .proj-edit textarea {
+  resize: vertical; font-family: inherit;
+}
+.proj-new-actions {
+  display: flex; gap: 6px; justify-content: flex-end;
+}
+.proj-new-actions button {
+  padding: 4px 12px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(255,255,255,0.03); color: inherit;
+  border-radius: 3px;
+}
+.proj-new-actions button.primary {
+  background: rgba(108,209,255,0.15); color: #6cd1ff;
+  border-color: #6cd1ff;
+}
+.proj-new-actions button:disabled { opacity: 0.4; cursor: default; }
+.proj-edit-done {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--muted, #888);
+}
+.proj-warn {
+  color: #d29922; font-size: 11px;
+}
+
+.proj-new-btn {
+  padding: 4px 10px; font-size: 12px;
+  border: 1px solid #6cd1ff;
   background: rgba(108,209,255,0.15); color: #6cd1ff;
   cursor: pointer; border-radius: 3px;
 }
-.proj-add button:disabled { opacity: 0.4; cursor: default; }
+.proj-new-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* --- Per-project add-task row --- */
+.proj-add-task {
+  display: grid;
+  grid-template-columns: 2fr 0.8fr 1fr 130px auto;
+  gap: 4px; padding: 6px 8px 8px 8px;
+  border-top: 1px dashed rgba(35,42,53,0.6);
+}
+.proj-add-task input {
+  padding: 4px 8px; font-size: 12px;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(255,255,255,0.03); color: inherit;
+  border-radius: 3px; min-width: 0;
+}
+.proj-add-task button {
+  padding: 4px 10px; font-size: 12px;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(108,209,255,0.12); color: #6cd1ff;
+  cursor: pointer; border-radius: 3px;
+}
+.proj-add-task button:disabled { opacity: 0.4; cursor: default; }
+.proj-add-toggle {
+  padding: 6px 8px;
+  border-top: 1px dashed rgba(35,42,53,0.6);
+}
+.proj-add-toggle button {
+  padding: 3px 10px; font-size: 12px;
+  border: 1px solid var(--border, #232a35);
+  background: transparent; color: var(--muted, #888);
+  cursor: pointer; border-radius: 3px;
+}
+.proj-add-toggle button:hover { color: #6cd1ff; border-color: #6cd1ff; }
+
 @media (max-width: 720px) {
-  .proj-add { grid-template-columns: 1fr 1fr; }
-  .proj-add > * { grid-column: span 2; }
-  .proj-add button { grid-column: span 2; }
+  .proj-add-task { grid-template-columns: 1fr 1fr; }
+  .proj-add-task > * { grid-column: span 2; }
+  .proj-new-row { grid-template-columns: 1fr; }
 }
 .proj-list { display: flex; flex-direction: column; gap: 6px; }
 .proj-group {
@@ -2746,6 +2808,28 @@ button.sv-smart-ac-chip:hover:not(:disabled) {
 }
 .proj-group-due { font-size: 11px; color: var(--muted, #888); }
 .proj-group-assignees { font-size: 11px; margin-left: auto; }
+.proj-group-assignee {
+  font-size: 11px; color: #ffd166;
+}
+.proj-group-actions {
+  margin-left: auto; display: flex; gap: 4px;
+}
+.proj-group-btn {
+  padding: 2px 6px; font-size: 11px; cursor: pointer;
+  border: 1px solid transparent; background: transparent;
+  color: var(--muted, #888); border-radius: 3px;
+}
+.proj-group-btn:hover {
+  color: #6cd1ff; border-color: #6cd1ff;
+}
+.proj-group-btn.danger:hover {
+  color: #ef6f6c; border-color: #ef6f6c;
+}
+.proj-group-desc {
+  padding: 4px 10px 6px 30px;
+  font-size: 12px; color: var(--muted, #888);
+  font-style: italic;
+}
 .proj-item-list {
   padding: 4px 6px 8px 6px;
   border-top: 1px solid rgba(35,42,53,0.6);
