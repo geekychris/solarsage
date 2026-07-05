@@ -3296,6 +3296,47 @@ async def smart_ac_override(
     }
 
 
+# --- Property mode (house occupancy) --------------------------------------
+
+@app.post("/api/property_mode/set")
+async def property_mode_set(
+    body: dict[str, Any],
+    _: Session | None = Depends(require_read),
+):
+    """Flip HA's ``input_boolean.house_unoccupied`` — the source of truth
+    for house occupancy the smart_ac scheduler reads.
+
+    Body: ``{"occupied": true|false}``. Returns the new state after HA
+    applies + a widget refresh so the dashboard tile updates immediately.
+    """
+    from .widgets.property_mode import (
+        HA_ENTITY as _HA_ENTITY,
+        read_ha_unoccupied,
+        set_ha_unoccupied,
+    )
+    if "occupied" not in body:
+        raise HTTPException(
+            status_code=400, detail="body must include 'occupied' (bool)",
+        )
+    occupied = bool(body.get("occupied"))
+    ok, detail = await set_ha_unoccupied(unoccupied=not occupied)
+    if not ok:
+        raise HTTPException(status_code=502, detail=detail)
+    # Force widget refresh so the dashboard reflects immediately.
+    try:
+        w = _require_widget("property_mode")
+        await widget_refresh_now(w, widget_store, sheets, _SUBS_BUNDLE, mqtt)
+    except Exception:  # noqa: BLE001
+        pass
+    new_state = await read_ha_unoccupied()
+    return {
+        "ok": True,
+        "occupied": (not new_state) if new_state is not None else None,
+        "ha_entity": _HA_ENTITY,
+        "ha_detail": detail,
+    }
+
+
 # --- DAB water-pump control ------------------------------------------------
 
 # Maps the widget's short ``action`` verb → (HA service, payload) tuples.

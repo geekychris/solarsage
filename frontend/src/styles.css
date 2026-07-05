@@ -1303,6 +1303,26 @@ select, input {
   border-color: #6cd1ff;
 }
 .property-mode-editor-actions button:disabled { opacity: 0.4; cursor: default; }
+.property-mode-ha-link {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--muted, #888);
+  text-decoration: none;
+}
+.property-mode-ha-link:hover { color: #6cd1ff; }
+.topbar-ha-link {
+  padding: 4px 10px;
+  border: 1px solid var(--border, #232a35);
+  background: rgba(255,255,255,0.03);
+  border-radius: 4px;
+  color: inherit;
+  text-decoration: none;
+  font-size: 13px;
+}
+.topbar-ha-link:hover {
+  border-color: #6cd1ff;
+  color: #6cd1ff;
+}
 
 /* Trip planner */
 .trip { display: flex; flex-direction: column; gap: 10px; }

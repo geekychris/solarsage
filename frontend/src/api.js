@@ -315,6 +315,12 @@ export const api = {
       method: "POST",
       body: { source },
     }),
+  // Property mode — flip HA's input_boolean.house_unoccupied
+  propertyModeSet: (occupied) =>
+    request("/api/property_mode/set", {
+      method: "POST",
+      body: { occupied },
+    }),
   // Smart AC override (delegates to Home Assistant). Pass either
   // ``duration_minutes`` (relative window) OR ``until`` (absolute
   // "YYYY-MM-DD HH:MM[:SS]" or ISO). If both are omitted or duration=0,

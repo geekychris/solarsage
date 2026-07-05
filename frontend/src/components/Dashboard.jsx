@@ -31,6 +31,7 @@ export default function Dashboard({ session, onLoggedOut, onSignIn, onSwitchMobi
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsBump, setSettingsBump] = useState(0);
   const [tzOffsetMinutes, setTzOffsetMinutes] = useState(null);
+  const [haUiUrl, setHaUiUrl] = useState(null);
   // Single-site for now — multi-site UI removed pending real implementation
   const siteId = "site-1";
   const [topTab, setTopTab] = useState(session?.guest ? "home" : "eg4");
@@ -44,7 +45,10 @@ export default function Dashboard({ session, onLoggedOut, onSignIn, onSwitchMobi
       if (session?.guest) {
         try {
           const s = await api.settings();
-          if (!cancelled) setTzOffsetMinutes(s.tz_offset_minutes ?? null);
+          if (!cancelled) {
+            setTzOffsetMinutes(s.tz_offset_minutes ?? null);
+            setHaUiUrl(s.ha_url || null);
+          }
         } catch {}
         return;
       }
@@ -56,6 +60,7 @@ export default function Dashboard({ session, onLoggedOut, onSignIn, onSwitchMobi
           setSelected(r.inverters[0].serialNum);
         }
         setTzOffsetMinutes(s.tz_offset_minutes ?? null);
+        setHaUiUrl(s.ha_url || null);
       } catch (ex) {
         if (ex.status === 401) {
           setToken(null);
@@ -133,6 +138,15 @@ export default function Dashboard({ session, onLoggedOut, onSignIn, onSwitchMobi
           )}
           {onEnterRotation && (
             <button onClick={onEnterRotation} title="Enter fullscreen rotation">📺 Rotate</button>
+          )}
+          {haUiUrl && (
+            <a
+              href={haUiUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="topbar-ha-link"
+              title="Open Home Assistant"
+            >🏠 HA ↗</a>
           )}
           {onToggleTheme && (
             <button
