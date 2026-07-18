@@ -1,16 +1,21 @@
 """Property mode widget — house-level occupancy.
 
 **Home Assistant is the source of truth.** The one entity that matters
-is ``input_boolean.house_unoccupied`` — the smart_ac scheduler reads it
+is ``input_boolean.house_occupied`` — the smart_ac scheduler reads it
 to decide whether to run normally or in bake-mitigation mode (only
 enough AC — living room being the priority — to keep the house from
 overheating while nobody's home).
 
+The entity is a **positive-polarity** flag: ON means the house IS
+occupied (someone's home), OFF means it's not. That matches how the
+other opt-in toggles read (``smart_ac_notify_telegram`` etc.) instead
+of the older negative-polarity ``house_unoccupied`` name.
+
 This widget mirrors that HA boolean and lets the user flip it from the
 dashboard. Two states:
 
-* **Occupied** — HA ``house_unoccupied`` = off. Normal AC operation.
-* **Unoccupied** — HA ``house_unoccupied`` = on. Bake-mitigation mode.
+* **Occupied** — HA ``house_occupied`` = on. Normal AC operation.
+* **Unoccupied** — HA ``house_occupied`` = off. Bake-mitigation mode.
 
 Fetch reads HA every refresh so a flip from anywhere (Telegram, HA UI,
 automation) shows up here. The toggle endpoint is
@@ -31,12 +36,12 @@ from .base import Widget
 
 log = logging.getLogger("eg4.widgets.property_mode")
 
-HA_ENTITY = "input_boolean.house_unoccupied"
+HA_ENTITY = "input_boolean.house_occupied"
 
 
-async def read_ha_unoccupied() -> bool | None:
-    """Return True if HA says the house is unoccupied, False if occupied,
-    None if HA is unavailable / not configured."""
+async def read_ha_occupied() -> bool | None:
+    """Return True if HA says the house is occupied (state ON), False if
+    unoccupied (state OFF), None if HA is unavailable / not configured."""
     ha_url = os.getenv("HA_URL", "").rstrip("/")
     ha_token = os.getenv("HA_TOKEN")
     if not ha_url or not ha_token:
@@ -57,13 +62,13 @@ async def read_ha_unoccupied() -> bool | None:
         return None
 
 
-async def set_ha_unoccupied(unoccupied: bool) -> tuple[bool, str]:
+async def set_ha_occupied(occupied: bool) -> tuple[bool, str]:
     """Flip the HA input_boolean. Returns (ok, detail)."""
     ha_url = os.getenv("HA_URL", "").rstrip("/")
     ha_token = os.getenv("HA_TOKEN")
     if not ha_url or not ha_token:
         return False, "HA_URL + HA_TOKEN not configured"
-    action = "turn_on" if unoccupied else "turn_off"
+    action = "turn_on" if occupied else "turn_off"
     try:
         async with aiohttp.ClientSession() as http:
             async with http.post(
@@ -98,8 +103,8 @@ class PropertyModeWidget(Widget):
     default_position = 1
 
     ha_entities = [
-        {"key": "house_unoccupied_entity",
-         "label": "house_unoccupied input_boolean",
+        {"key": "house_occupied_entity",
+         "label": "house_occupied input_boolean",
          "domain": "input_boolean", "required": False,
          "default": HA_ENTITY},
     ]
@@ -111,13 +116,12 @@ class PropertyModeWidget(Widget):
     default_config = {}
 
     async def fetch(self, config: dict[str, Any]) -> dict[str, Any]:
-        ha_unoccupied = await read_ha_unoccupied()
+        occupied = await read_ha_occupied()
         ha_url = os.getenv("HA_URL", "").rstrip("/")
         return {
             "fetched_at": datetime.now(timezone.utc).isoformat(),
             "ha_entity": HA_ENTITY,
-            "ha_unoccupied": ha_unoccupied,
-            "occupied": (not ha_unoccupied) if ha_unoccupied is not None else None,
+            "occupied": occupied,
             "ha_ui_url": ha_url or None,
             # Deep-link to this specific entity's page so clicking the
             # link drops the user right onto the toggle in HA — useful

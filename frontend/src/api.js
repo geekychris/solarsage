@@ -315,7 +315,7 @@ export const api = {
       method: "POST",
       body: { source },
     }),
-  // Property mode — flip HA's input_boolean.house_unoccupied
+  // Property mode — flip HA's input_boolean.house_occupied
   propertyModeSet: (occupied) =>
     request("/api/property_mode/set", {
       method: "POST",

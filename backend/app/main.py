@@ -3303,23 +3303,24 @@ async def property_mode_set(
     body: dict[str, Any],
     _: Session | None = Depends(require_read),
 ):
-    """Flip HA's ``input_boolean.house_unoccupied`` — the source of truth
-    for house occupancy the smart_ac scheduler reads.
+    """Flip HA's ``input_boolean.house_occupied`` — the source of truth
+    for house occupancy the smart_ac scheduler reads. Positive polarity:
+    ON = occupied, OFF = unoccupied.
 
     Body: ``{"occupied": true|false}``. Returns the new state after HA
     applies + a widget refresh so the dashboard tile updates immediately.
     """
     from .widgets.property_mode import (
         HA_ENTITY as _HA_ENTITY,
-        read_ha_unoccupied,
-        set_ha_unoccupied,
+        read_ha_occupied,
+        set_ha_occupied,
     )
     if "occupied" not in body:
         raise HTTPException(
             status_code=400, detail="body must include 'occupied' (bool)",
         )
     occupied = bool(body.get("occupied"))
-    ok, detail = await set_ha_unoccupied(unoccupied=not occupied)
+    ok, detail = await set_ha_occupied(occupied=occupied)
     if not ok:
         raise HTTPException(status_code=502, detail=detail)
     # Force widget refresh so the dashboard reflects immediately.
@@ -3328,10 +3329,10 @@ async def property_mode_set(
         await widget_refresh_now(w, widget_store, sheets, _SUBS_BUNDLE, mqtt)
     except Exception:  # noqa: BLE001
         pass
-    new_state = await read_ha_unoccupied()
+    new_state = await read_ha_occupied()
     return {
         "ok": True,
-        "occupied": (not new_state) if new_state is not None else None,
+        "occupied": new_state,
         "ha_entity": _HA_ENTITY,
         "ha_detail": detail,
     }
