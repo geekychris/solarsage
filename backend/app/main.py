@@ -96,6 +96,7 @@ from .widgets.consumption_yoy import ConsumptionYoYWidget
 from .widgets.solar_vitals import SolarVitalsWidget
 from .widgets.ac_override import AcOverrideWidget
 from .widgets.smart_ac_decisions import SmartAcDecisionsWidget
+from .widgets.smart_ac_plan import SmartAcPlanWidget
 from .translations import TranslationsStore, mymemory_translate
 from .widgets.todo import TodoWidget
 from .widgets.projects import ProjectsWidget
@@ -183,6 +184,7 @@ def _register_builtin_widgets() -> None:
         SolarVitalsWidget(),
         AcOverrideWidget(),
         SmartAcDecisionsWidget(),
+        SmartAcPlanWidget(),
         SolarExcessWidget(),
         PrecoolWidget(),
         ConsumptionYoYWidget(),
